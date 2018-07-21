@@ -5,6 +5,7 @@ module Jutils
 include("Transforms.jl")
 include("Functions.jl")
 include("Elements.jl")
-include("Topology.jl")
+include("Topologies.jl")
+include("Mesh.jl")
 
 end # module

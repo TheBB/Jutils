@@ -1,3 +1,0 @@
-module Topology
-
-end # module

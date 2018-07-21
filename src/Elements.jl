@@ -6,6 +6,9 @@ import Base.Iterators: repeated
 
 import ..Transforms: AbstractTransform, apply
 
+export Simplex, Element
+
+
 abstract type AbstractElement end
 abstract type ReferenceElement end
 
