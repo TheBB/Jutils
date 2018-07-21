@@ -82,7 +82,13 @@ const trans = Argument(:trans, TransformChain)
 
 abstract type AbstractArrayFunction <: AbstractFunction end
 
+asarray(v::AbstractArrayFunction) = v
+asarray(v::Real) = Constant(v)
+asarray(v::AbstractArray) = Constant(v)
+
 Base.show(io::IO, self::AbstractArrayFunction) = print(io, string(typeof(self).name.name), size(self))
+Base.:+(self::AbstractArrayFunction, rest...) = Sum(self, (asarray(v) for v in rest)...)
+Base.:*(self::AbstractArrayFunction, rest...) = Product(self, (asarray(v) for v in rest)...)
 
 
 struct ApplyTransform <: AbstractArrayFunction
