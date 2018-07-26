@@ -9,7 +9,6 @@ import ..Transforms: AbstractTransform, apply
 export Simplex, Element
 
 
-abstract type AbstractElement end
 abstract type ReferenceElement end
 
 
@@ -41,7 +40,7 @@ function vertices(self::Tensor)
 end
 
 
-struct Element <: AbstractElement
+struct Element
     reference :: ReferenceElement
     transform :: Tuple{Vararg{AbstractTransform}}
     index :: Int
