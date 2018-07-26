@@ -8,7 +8,7 @@ import Base: convert, size
 import ..Transforms: TransformChain
 import ..Elements: Element
 
-export ast, generate, rootcoords, Constant, Sum, Product
+export ast, generate, rootcoords, Constant, Elementwise, Matmat, Monomials, Polynomials, Product, Sum
 
 
 abstract type AbstractFunction end
@@ -148,22 +148,58 @@ codegen(self::Elementwise, index) = :($(self.data)[.., $index:$index])
 
 
 
-# Sum
+# Matmat
+# TODO: For now, this only works as a matrix-vector product
 
-struct Sum <: AbstractArrayFunction
-    terms :: Tuple{Vararg{AbstractArrayFunction}}
+struct Matmat <: AbstractArrayFunction
+    left :: AbstractArrayFunction
+    right :: AbstractArrayFunction
 end
 
-Sum(terms::AbstractArrayFunction...) = Sum(terms)
+arguments(self::Matmat) = (self.left, self.right)
+size(self::Matmat) = (size(self.left)[1],)
 
-arguments(self::Sum) = self.terms
-size(self::Sum) = broadcast_shape((size(term) for term in self.terms)...)
-function codegen(self::Sum, args...)
-    code = args[1]
-    for arg in args[2:end]
-        code = :($code .+ $arg)
+function codegen(self::Matmat, left, right)
+    (value, l, r, j) = gensym("value"), gensym("l"), gensym("r"), gensym("j")
+    (lrange, rrange) = gensym("lrange"), gensym("rrange"), gensym("trange")
+
+    code = Any[
+        :($lrange = size($left)[end] == 1 ? Iterators.repeated(1) : (1:size($left)[end])),
+        :($rrange = size($right)[end] == 1 ? Iterators.repeated(1) : (1:size($right)[end])),
+        :($value = zeros(Float64, $(size(self)...), max(size($left)[end], size($right)[end]))),
+        :(for ($l, $r, $j) in zip($lrange, $rrange, 1:max(size($left)[end], size($right)[end]))
+              $value[:,$j] = $left[:,:,$l] * $right[:,$r]
+          end),
+        :($value),
+    ]
+
+    Expr(:block, code...)
+end
+
+
+
+# Polynomials
+
+struct Monomials <: AbstractArrayFunction
+    points :: AbstractFunction
+    degree :: Int
+end
+
+arguments(self::Monomials) = (self.points,)
+size(self::Monomials) = (self.degree+1,)
+
+function codegen(self::Monomials, points)
+    (value, j) = gensym("value"), gensym("j")
+    code = Any[:($value = zeros(Float64, $(self.degree+1), length($points)))]
+
+    loopcode = Any[:($value[1,$j] = 1.0)]
+    for i in 1:self.degree
+        push!(loopcode, :($value[$(i+1),$j] = $value[$i,$j] * $points[1,$j]))
     end
-    code
+    push!(code, Expr(:for, :($j = 1:length($points)), Expr(:block, loopcode...)))
+
+    push!(code, :($value))
+    Expr(:block, code...)
 end
 
 
@@ -184,6 +220,26 @@ function codegen(self::Product, args...)
     code = args[1]
     for arg in args[2:end]
         code = :($code .* $arg)
+    end
+    code
+end
+
+
+
+# Sum
+
+struct Sum <: AbstractArrayFunction
+    terms :: Tuple{Vararg{AbstractArrayFunction}}
+end
+
+Sum(terms::AbstractArrayFunction...) = Sum(terms)
+
+arguments(self::Sum) = self.terms
+size(self::Sum) = broadcast_shape((size(term) for term in self.terms)...)
+function codegen(self::Sum, args...)
+    code = args[1]
+    for arg in args[2:end]
+        code = :($code .+ $arg)
     end
     code
 end
