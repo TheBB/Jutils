@@ -3,9 +3,10 @@ module Functions
 import OrderedCollections: OrderedDict
 import Base.Broadcast: broadcast_shape
 import Base.Iterators: flatten, isdone, repeated, Stateful
-import Base: size
+import Base: convert, size
 
 import ..Transforms: TransformChain
+import ..Elements: Element
 
 export ast, generate, rootcoords, Constant, Sum, Product
 
@@ -55,30 +56,38 @@ function generate(func::AbstractFunction)
     end
     code = Expr(:block, code...)
 
-    typeinfo = [(func.symbol, func.type_) for func in keys(indices) if isa(func, Argument)]
+    typeinfo = [(:points, Array{Float64,2}), (:element, Element)]
     paramlist = Expr(:parameters, (:($sym::$tp) for (sym, tp) in typeinfo)...)
     prototype = Expr(:call, :evaluate, paramlist)
     definition = Expr(:function, prototype, code)
 
     mod = Module()
+    Core.eval(mod, :(import Jutils.Elements: Element))
     Core.eval(mod, :(import Jutils.Transforms: applytrans))
+    Core.eval(mod, :(using EllipsisNotation))
     Core.eval(mod, definition)
     return mod.evaluate
 end
 
 
+
+# Evaluation arguments
+
 struct Argument <: AbstractFunction
-    symbol :: Symbol
-    type_ :: DataType
+    expression :: Union{Symbol, Expr}
 end
 
-Base.show(io::IO, self::Argument) = print(io, "Argument($(self.symbol))")
+Base.show(io::IO, self::Argument) = print(io, "Argument($(self.expression))")
 arguments(::Argument) = ()
-codegen(self::Argument) = self.symbol
+codegen(self::Argument) = self.expression
 
-const points = Argument(:points, Array{Float64,2})
-const trans = Argument(:trans, TransformChain)
+const points = Argument(:points)              # Quadrature points (reference coordinates)
+const trans = Argument(:(element.transform))  # Element transformation
+const elemindex = Argument(:(element.index))  # Element index
 
+
+
+# Array functions
 
 abstract type AbstractArrayFunction <: AbstractFunction end
 
@@ -91,6 +100,9 @@ Base.:+(self::AbstractArrayFunction, rest...) = Sum(self, (asarray(v) for v in r
 Base.:*(self::AbstractArrayFunction, rest...) = Product(self, (asarray(v) for v in rest)...)
 
 
+
+# ApplyTransform
+
 struct ApplyTransform <: AbstractArrayFunction
     trans :: AbstractFunction
     arg :: AbstractFunction
@@ -102,14 +114,41 @@ size(self::ApplyTransform) = (self.dims,)
 codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $(trans)...))
 
 
-struct Constant <: AbstractArrayFunction
-    value :: Any
+
+# Constant
+
+struct Constant{T} <: AbstractArrayFunction
+    value :: Array{T}
+
+    # Pad with a dummy dimension for broadcasting over quadrature points
+    Constant(v::Array{T}) where T = new{T}(reshape(v, size(v)..., 1))
 end
 
+# Scalars are wrapped as zero-dimensional arrays
+Constant(v::T) where T<:Number = (wrap = Array{T,0}(undef); wrap[] = v; Constant(wrap))
+
 arguments(::Constant) = ()
-size(self::Constant) = size(self.value)
+size(self::Constant) = size(self.value)[1:end-1]
 codegen(self::Constant) = self.value
 
+
+
+# Elementwise
+
+struct Elementwise <: AbstractArrayFunction
+    data :: Array
+    index :: AbstractFunction
+end
+
+arguments(self::Elementwise) = (self.index,)
+size(self::Elementwise) = size(self.data)[1:end-1]
+
+# Use a range for the last index to gert a dummy dimension for broadcasting
+codegen(self::Elementwise, index) = :($(self.data)[.., $index:$index])
+
+
+
+# Sum
 
 struct Sum <: AbstractArrayFunction
     terms :: Tuple{Vararg{AbstractArrayFunction}}
@@ -128,6 +167,9 @@ function codegen(self::Sum, args...)
 end
 
 
+
+# Product
+
 struct Product <: AbstractArrayFunction
     terms :: Tuple{Vararg{AbstractArrayFunction}}
 end
@@ -136,6 +178,8 @@ Product(terms::AbstractArrayFunction...) = Product(terms)
 
 arguments(self::Product) = self.terms
 size(self::Product) = broadcast_shape((size(term) for term in self.terms)...)
+
+# Note: element-wise product!
 function codegen(self::Product, args...)
     code = args[1]
     for arg in args[2:end]
@@ -144,6 +188,9 @@ function codegen(self::Product, args...)
     code
 end
 
+
+
+# Miscellaneous
 
 rootcoords(ndims::Int) = ApplyTransform(trans, points, ndims)
 
