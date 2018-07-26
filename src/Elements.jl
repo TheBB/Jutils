@@ -44,9 +44,10 @@ end
 struct Element <: AbstractElement
     reference :: ReferenceElement
     transform :: Tuple{Vararg{AbstractTransform}}
+    index :: Int
 end
 
-Element(ref::ReferenceElement, transforms::AbstractTransform...) = Element(ref, transforms)
+Element(ref::ReferenceElement, index::Int, transforms::AbstractTransform...) = Element(ref, transforms, index)
 
 ndims(self::Element) = ndims(self.reference)
 nvertices(self::Element) = nvertices(self.reference)

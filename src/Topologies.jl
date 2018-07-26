@@ -18,7 +18,7 @@ Base.IndexStyle(::Type{Line}) = IndexLinear()
 
 @inline function Base.getindex(self::Line, i::Int)
     @boundscheck checkbounds(self, i)
-    Element(Simplex{1}(), (Shift([float(i) - 1])))
+    Element(Simplex{1}(), (Shift([float(i) - 1]),), i)
 end
 
 end # module
