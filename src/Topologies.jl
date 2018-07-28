@@ -5,7 +5,7 @@ import Base: getindex
 
 using ..Transforms
 using ..Elements
-import ..Functions: Elementwise, Monomials, elemindex, points, Constant, Matmat
+import ..Functions: Elementwise, Monomials, elemindex, points, Constant, Matmul
 
 export Line, Lagrange, basis
 
@@ -30,7 +30,7 @@ function basis(self::Line, ::Type{Lagrange}, degree::Int)
     dofmap = Elementwise(dofs, elemindex)
     poly = Monomials(points, degree)
     coeffs = hcat([[binomial(degree,nu) * binomial(degree-nu,k-nu) * (isodd(k-nu) ? -1 : 1) for nu in 0:degree] for k in 0:degree]...)
-    Matmat(Constant(coeffs), poly)
+    Matmul(Constant(coeffs), poly)
 end
 
 end # module

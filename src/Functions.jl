@@ -3,12 +3,12 @@ module Functions
 import OrderedCollections: OrderedDict
 import Base.Broadcast: broadcast_shape
 import Base.Iterators: flatten, isdone, repeated, Stateful
-import Base: convert, size
+import Base: convert, size, ndims
 
 import ..Transforms: TransformChain
 import ..Elements: Element
 
-export ast, generate, rootcoords, Constant, Elementwise, Matmat, Monomials, Polynomials, Product, Sum
+export ast, generate, rootcoords, Constant, Elementwise, Matmul, Monomials, Polynomials, Product, Sum
 
 
 abstract type AbstractFunction end
@@ -64,6 +64,7 @@ function generate(func::AbstractFunction)
     mod = Module()
     Core.eval(mod, :(import Jutils.Elements: Element))
     Core.eval(mod, :(import Jutils.Transforms: applytrans))
+    Core.eval(mod, :(using Jutils.Runtime))
     Core.eval(mod, :(using EllipsisNotation))
     Core.eval(mod, definition)
     return mod.evaluate
@@ -95,6 +96,7 @@ asarray(v::AbstractArrayFunction) = v
 asarray(v::Real) = Constant(v)
 asarray(v::AbstractArray) = Constant(v)
 
+Base.ndims(self::AbstractArrayFunction) = length(size(self))
 Base.show(io::IO, self::AbstractArrayFunction) = print(io, string(typeof(self).name.name), size(self))
 Base.:+(self::AbstractArrayFunction, rest...) = Sum(self, (asarray(v) for v in rest)...)
 Base.:*(self::AbstractArrayFunction, rest...) = Product(self, (asarray(v) for v in rest)...)
@@ -148,32 +150,21 @@ codegen(self::Elementwise, index) = :($(self.data)[.., $index:$index])
 
 
 
-# Matmat
-# TODO: For now, this only works as a matrix-vector product
+# Matmul
+# TODO: For now, this only does a single tensor contraction
 
-struct Matmat <: AbstractArrayFunction
+struct Matmul <: AbstractArrayFunction
     left :: AbstractArrayFunction
     right :: AbstractArrayFunction
 end
 
-arguments(self::Matmat) = (self.left, self.right)
-size(self::Matmat) = (size(self.left)[1],)
+arguments(self::Matmul) = (self.left, self.right)
+size(self::Matmul) = (size(self.left)[1:end-1]..., size(self.right)[2:end]...)
 
-function codegen(self::Matmat, left, right)
+function codegen(self::Matmul, left, right)
     (value, l, r, j) = gensym("value"), gensym("l"), gensym("r"), gensym("j")
     (lrange, rrange) = gensym("lrange"), gensym("rrange"), gensym("trange")
-
-    code = Any[
-        :($lrange = size($left)[end] == 1 ? Iterators.repeated(1) : (1:size($left)[end])),
-        :($rrange = size($right)[end] == 1 ? Iterators.repeated(1) : (1:size($right)[end])),
-        :($value = zeros(Float64, $(size(self)...), max(size($left)[end], size($right)[end]))),
-        :(for ($l, $r, $j) in zip($lrange, $rrange, 1:max(size($left)[end], size($right)[end]))
-              $value[:,$j] = $left[:,:,$l] * $right[:,$r]
-          end),
-        :($value),
-    ]
-
-    Expr(:block, code...)
+    code = :(matmul($left, $right))
 end
 
 
