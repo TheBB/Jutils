@@ -8,7 +8,9 @@ import Base: convert, size, ndims
 import ..Transforms: TransformChain
 import ..Elements: Element
 
-export ast, generate, rootcoords, Constant, Elementwise, Matmul, Monomials, Polynomials, Product, Sum
+export ast, generate, restype
+export rootcoords, trans, elemindex
+export Constant, Elementwise, Matmul, Monomials, Polynomials, Product, Sum
 
 
 abstract type AbstractFunction end
@@ -72,43 +74,63 @@ end
 
 
 
-# Evaluation arguments
+# Generic evaluation arguments
 
-struct Argument <: AbstractFunction
+struct Argument{T} <: AbstractFunction
     expression :: Union{Symbol, Expr}
 end
 
 Base.show(io::IO, self::Argument) = print(io, "Argument($(self.expression))")
-arguments(::Argument) = ()
+arguments(::Argument) where T = ()
 codegen(self::Argument) = self.expression
+restype(self::Argument{T}) where T = T
 
-const points = Argument(:points)              # Quadrature points (reference coordinates)
-const trans = Argument(:(element.transform))  # Element transformation
-const elemindex = Argument(:(element.index))  # Element index
+# Element transformation
+const trans = Argument{TransformChain}(:(element.transform))
+
+# Element index
+const elemindex = Argument{Int}(:(element.index))
 
 
 
 # Array functions
 
-abstract type AbstractArrayFunction <: AbstractFunction end
+abstract type AbstractArrayFunction{T,N} <: AbstractFunction end
 
 asarray(v::AbstractArrayFunction) = v
 asarray(v::Real) = Constant(v)
 asarray(v::AbstractArray) = Constant(v)
 
-Base.ndims(self::AbstractArrayFunction) = length(size(self))
+Base.ndims(self::AbstractArrayFunction{T,N}) where {T,N} = N :: Int
 Base.show(io::IO, self::AbstractArrayFunction) = print(io, string(typeof(self).name.name), size(self))
 Base.:+(self::AbstractArrayFunction, rest...) = Sum(self, (asarray(v) for v in rest)...)
 Base.:*(self::AbstractArrayFunction, rest...) = Product(self, (asarray(v) for v in rest)...)
+restype(self::AbstractArrayFunction{T,N}) where {T,N} = Array{T,N}
+
+
+
+# Quadrature points (reference coordinates)
+
+struct Points{T,N} <: AbstractArrayFunction{T,1} end
+
+arguments(self::Points) = ()
+size(self::Points{T,N}) where {T,N} = (N::Int,)
+codegen(self::Points) = :points
 
 
 
 # ApplyTransform
 
-struct ApplyTransform <: AbstractArrayFunction
+struct ApplyTransform <: AbstractArrayFunction{Float64,2}
     trans :: AbstractFunction
     arg :: AbstractFunction
     dims :: Int
+
+    function ApplyTransform(trans, arg, dims)
+        restype(trans) == TransformChain || error("Transformation must be TransformChain")
+        restype(arg) == Array{Float64,1} || error("Argument must be vector")
+        new(trans, arg, dims)
+    end
 end
 
 arguments(self::ApplyTransform) = (self.trans, self.arg)
@@ -119,33 +141,36 @@ codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $(trans)...))
 
 # Constant
 
-struct Constant{T} <: AbstractArrayFunction
-    value :: Array{T}
-
-    # Pad with a dummy dimension for broadcasting over quadrature points
-    Constant(v::Array{T}) where T = new{T}(reshape(v, size(v)..., 1))
+struct Constant{T,N} <: AbstractArrayFunction{T,N}
+    value :: Array{T,N}
 end
 
 # Scalars are wrapped as zero-dimensional arrays
 Constant(v::T) where T<:Number = (wrap = Array{T,0}(undef); wrap[] = v; Constant(wrap))
 
 arguments(::Constant) = ()
-size(self::Constant) = size(self.value)[1:end-1]
-codegen(self::Constant) = self.value
+size(self::Constant) = size(self.value)
+codegen(self::Constant) = reshape(self.value, size(self.value)..., 1)
 
 
 
 # Elementwise
 
-struct Elementwise <: AbstractArrayFunction
-    data :: Array
+struct Elementwise{T,N} <: AbstractArrayFunction{T,N}
+    data :: Array{T}
     index :: AbstractFunction
+
+    function Elementwise(data::Array{T}, index) where T
+        ndims(data) > 0 || error("Expected at least a one-dimensional array")
+        restype(index) == Int || error("Index must be integer")
+        new{T, ndims(data)-1}(data, index)
+    end
 end
 
 arguments(self::Elementwise) = (self.index,)
 size(self::Elementwise) = size(self.data)[1:end-1]
 
-# Use a range for the last index to gert a dummy dimension for broadcasting
+# Use a range for the last index to generate a dummy dimension for broadcasting
 codegen(self::Elementwise, index) = :($(self.data)[.., $index:$index])
 
 
@@ -153,9 +178,16 @@ codegen(self::Elementwise, index) = :($(self.data)[.., $index:$index])
 # Matmul
 # TODO: For now, this only does a single tensor contraction
 
-struct Matmul <: AbstractArrayFunction
-    left :: AbstractArrayFunction
-    right :: AbstractArrayFunction
+struct Matmul{T,L,R,N} <: AbstractArrayFunction{T,N}
+    left :: AbstractArrayFunction{L}
+    right :: AbstractArrayFunction{R}
+
+    function Matmul(left::AbstractArrayFunction{L}, right::AbstractArrayFunction{R}) where {L <: Number, R <: Number}
+        ndims(left) > 0 || error("Expected at least a one-dimensional array")
+        ndims(right) > 0 || error("Expected at least a one-dimensional array")
+        size(left)[end] == size(right)[1] || error("Inconsistent dimensions for contraction")
+        new{promote_type(L, R), L, R, ndims(left) + ndims(right) - 2}(left, right)
+    end
 end
 
 arguments(self::Matmul) = (self.left, self.right)
@@ -171,23 +203,27 @@ end
 
 # Polynomials
 
-struct Monomials <: AbstractArrayFunction
-    points :: AbstractFunction
+struct Monomials{T,N} <: AbstractArrayFunction{T,N}
+    points :: AbstractArrayFunction{T}
     degree :: Int
+
+    function Monomials(points::AbstractArrayFunction{T,M}, degree::Int) where {T,M}
+        new{T,M+1}(points, degree)
+    end
 end
 
 arguments(self::Monomials) = (self.points,)
-size(self::Monomials) = (self.degree+1,)
+size(self::Monomials) = (self.degree + 1, size(self.points)...)
 
 function codegen(self::Monomials, points)
     (value, j) = gensym("value"), gensym("j")
-    code = Any[:($value = zeros(Float64, $(self.degree+1), length($points)))]
+    code = Any[:($value = zeros(Float64, $(self.degree+1), size($points)...))]
 
     loopcode = Any[:($value[1,$j] = 1.0)]
     for i in 1:self.degree
-        push!(loopcode, :($value[$(i+1),$j] = $value[$i,$j] * $points[1,$j]))
+        push!(loopcode, :($value[$(i+1),$j] = $value[$i,$j] * $points[$j]))
     end
-    push!(code, Expr(:for, :($j = 1:length($points)), Expr(:block, loopcode...)))
+    push!(code, Expr(:for, :($j = CartesianIndices(size($points))), Expr(:block, loopcode...)))
 
     push!(code, :($value))
     Expr(:block, code...)
@@ -197,8 +233,13 @@ end
 
 # Product
 
-struct Product <: AbstractArrayFunction
+struct Product{T,N} <: AbstractArrayFunction{T,N}
     terms :: Tuple{Vararg{AbstractArrayFunction}}
+
+    function Product(terms::Tuple{Vararg{AbstractArrayFunction}})
+        newshape = broadcast_shape((size(term) for term in terms)...)
+        new{reduce(promote_type, (restype(term) for term in terms)), length(newshape)}(terms)
+    end
 end
 
 Product(terms::AbstractArrayFunction...) = Product(terms)
@@ -219,8 +260,13 @@ end
 
 # Sum
 
-struct Sum <: AbstractArrayFunction
+struct Sum{T,N} <: AbstractArrayFunction{T,N}
     terms :: Tuple{Vararg{AbstractArrayFunction}}
+
+    function Sum(terms::Tuple{Vararg{AbstractArrayFunction}})
+        newshape = broadcast_shape((size(term) for term in terms)...)
+        new{reduce(promote_type, (restype(term) for term in terms)), length(newshape)}(terms)
+    end
 end
 
 Sum(terms::AbstractArrayFunction...) = Sum(terms)
@@ -239,6 +285,6 @@ end
 
 # Miscellaneous
 
-rootcoords(ndims::Int) = ApplyTransform(trans, points, ndims)
+rootcoords(ndims::Int) = ApplyTransform(trans, points{Float64,2}, ndims)
 
 end # module

@@ -1,5 +1,7 @@
 module Transforms
 
+using AutoHashEquals
+
 abstract type AbstractTransform end
 
 export Shift, applytrans
@@ -7,7 +9,7 @@ export Shift, applytrans
 TransformChain = Tuple{Vararg{AbstractTransform}}
 
 
-struct Shift <: AbstractTransform
+@auto_hash_equals struct Shift <: AbstractTransform
     offset :: Array{Float64,1}
 end
 

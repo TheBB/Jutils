@@ -1,3 +1,8 @@
+[[AutoHashEquals]]
+git-tree-sha1 = "45bb6705d93be619b81451bb2006b7ee5d4e4453"
+uuid = "15f4f7f2-30c1-5605-9d31-71845cf9641f"
+version = "0.2.0"
+
 [[EllipsisNotation]]
 git-tree-sha1 = "c09a512ff36dd5785ddc04fc102f2ff3b7fe05ae"
 uuid = "da5c29d0-fa7d-589e-88eb-ea29b0a81949"
