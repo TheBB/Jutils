@@ -18,14 +18,12 @@ todims(self::Shift) = length(self.offset)
 codegen(::Type{Shift}, transform::Expr, points::Symbol) = :($points .+ $transform.offset)
 
 
-apply(points::Array{Float64}, transforms::TransformChain) = apply(points, transforms...)
-
-@generated function applytrans(points::Array{Float64}, transforms::AbstractTransform...)
-    symbols = [gensym(string(index)) for index in 1:length(transforms)+1]
+@generated function applytrans(points::Array{Float64}, transforms::TransformChain)
+    symbols = [gensym(string(index)) for index in 1:fieldcount(transforms)+1]
 
     ret = :($(symbols[1]) = points)
-    for ((i, trf), fromsym, tosym) in zip(enumerate(transforms), symbols[1:end-1], symbols[2:end])
-        code = codegen(trf, :(transforms[$i]), fromsym)
+    for (i, fromsym, tosym) in zip(1:fieldcount(transforms), symbols[1:end-1], symbols[2:end])
+        code = codegen(fieldtype(transforms, i), :(transforms[$i]), fromsym)
         ret = :($ret; $tosym = $code)
     end
     ret

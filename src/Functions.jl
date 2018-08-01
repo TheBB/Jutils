@@ -9,14 +9,17 @@ import ..Transforms: TransformChain
 import ..Elements: Element
 
 export ast, generate, restype
-export rootcoords, trans, elemindex
-export Constant, Elementwise, Matmul, Monomials, Polynomials, Product, Sum
+export elemindex, trans, Point
+export ApplyTransform, Constant, Elementwise, Matmul, Monomials, Product, Sum
 
 
-abstract type AbstractFunction end
+abstract type Evaluable{T} end
 
-ast(self::AbstractFunction) = ast!(self, Set{AbstractFunction}(), dependencies(self))
-function ast!(self::AbstractFunction, seen::Set{AbstractFunction}, indices::OrderedDict{AbstractFunction,Int})
+restype(self::Evaluable{T}) where T = T
+
+ast(self::Evaluable) = ast!(self, Set{Evaluable}(), dependencies(self))
+
+function ast!(self::Evaluable, seen::Set{Evaluable}, indices::OrderedDict{Evaluable,Int})
     self in seen && return string("%", string(indices[self]))
 
     s = ""
@@ -32,13 +35,13 @@ function ast!(self::AbstractFunction, seen::Set{AbstractFunction}, indices::Orde
     string("%", string(indices[self]), " = ", repr(self), s)
 end
 
-function dependencies(self::AbstractFunction)
-    indices = OrderedDict{AbstractFunction,Int}()
+function dependencies(self::Evaluable)
+    indices = OrderedDict{Evaluable,Int}()
     dependencies!(indices, self)
     indices
 end
 
-function dependencies!(indices::OrderedDict{AbstractFunction,Int}, self::AbstractFunction)
+function dependencies!(indices::OrderedDict{Evaluable,Int}, self::Evaluable)
     haskey(indices, self) && return
     for func in arguments(self)
         dependencies!(indices, func)
@@ -46,9 +49,9 @@ function dependencies!(indices::OrderedDict{AbstractFunction,Int}, self::Abstrac
     indices[self] = length(indices) + 1
 end
 
-function generate(func::AbstractFunction)
+function generate(func::Evaluable; show::Bool=false)
     indices = dependencies(func)
-    symbols = Dict{AbstractFunction,Symbol}(func => gensym(string(index)) for (func, index) in indices)
+    symbols = Dict{Evaluable,Symbol}(func => gensym(string(index)) for (func, index) in indices)
 
     code = Array{Expr,1}()
     for (func, index) in indices
@@ -58,10 +61,12 @@ function generate(func::AbstractFunction)
     end
     code = Expr(:block, code...)
 
-    typeinfo = [(:points, Array{Float64,2}), (:element, Element)]
+    typeinfo = [(:point, Vector{Float64}), (:element, Element)]
     paramlist = Expr(:parameters, (:($sym::$tp) for (sym, tp) in typeinfo)...)
     prototype = Expr(:call, :evaluate, paramlist)
     definition = Expr(:function, prototype, code)
+
+    show && @show definition
 
     mod = Module()
     Core.eval(mod, :(import Jutils.Elements: Element))
@@ -76,14 +81,13 @@ end
 
 # Generic evaluation arguments
 
-struct Argument{T} <: AbstractFunction
+struct Argument{T} <: Evaluable{T}
     expression :: Union{Symbol, Expr}
 end
 
 Base.show(io::IO, self::Argument) = print(io, "Argument($(self.expression))")
 arguments(::Argument) where T = ()
 codegen(self::Argument) = self.expression
-restype(self::Argument{T}) where T = T
 
 # Element transformation
 const trans = Argument{TransformChain}(:(element.transform))
@@ -95,119 +99,99 @@ const elemindex = Argument{Int}(:(element.index))
 
 # Array functions
 
-abstract type AbstractArrayFunction{T,N} <: AbstractFunction end
+abstract type ArrayEvaluable{T,N} <: Evaluable{Array{T,N}} end
 
-asarray(v::AbstractArrayFunction) = v
+asarray(v::ArrayEvaluable) = v
 asarray(v::Real) = Constant(v)
 asarray(v::AbstractArray) = Constant(v)
 
-Base.ndims(self::AbstractArrayFunction{T,N}) where {T,N} = N :: Int
-Base.show(io::IO, self::AbstractArrayFunction) = print(io, string(typeof(self).name.name), size(self))
-Base.:+(self::AbstractArrayFunction, rest...) = Sum(self, (asarray(v) for v in rest)...)
-Base.:*(self::AbstractArrayFunction, rest...) = Product(self, (asarray(v) for v in rest)...)
-restype(self::AbstractArrayFunction{T,N}) where {T,N} = Array{T,N}
+Base.ndims(self::ArrayEvaluable{T,N}) where {T,N} = N :: Int
+Base.size(self::ArrayEvaluable, dim::Int) = size(self)[dim]
+Base.show(io::IO, self::ArrayEvaluable) = print(io, string(typeof(self).name.name), size(self))
+Base.:+(self::ArrayEvaluable, rest...) = Sum(self, (asarray(v) for v in rest)...)
+Base.:*(self::ArrayEvaluable, rest...) = Product(self, (asarray(v) for v in rest)...)
 
 
 
-# Quadrature points (reference coordinates)
+# Quadrature point (reference coordinates)
 
-struct Points{T,N} <: AbstractArrayFunction{T,1} end
+struct Point{N} <: ArrayEvaluable{Float64,1} end
 
-arguments(self::Points) = ()
-size(self::Points{T,N}) where {T,N} = (N::Int,)
-codegen(self::Points) = :points
+arguments(self::Point) = ()
+size(self::Point{N}) where {T,N} = (N::Int,)
+codegen(self::Point) = :point
 
 
 
 # ApplyTransform
 
-struct ApplyTransform <: AbstractArrayFunction{Float64,2}
-    trans :: AbstractFunction
-    arg :: AbstractFunction
+struct ApplyTransform <: ArrayEvaluable{Float64,1}
+    trans :: Evaluable{TransformChain}
+    arg :: ArrayEvaluable{Float64,1}
     dims :: Int
-
-    function ApplyTransform(trans, arg, dims)
-        restype(trans) == TransformChain || error("Transformation must be TransformChain")
-        restype(arg) == Array{Float64,1} || error("Argument must be vector")
-        new(trans, arg, dims)
-    end
 end
 
 arguments(self::ApplyTransform) = (self.trans, self.arg)
 size(self::ApplyTransform) = (self.dims,)
-codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $(trans)...))
+codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $trans))
 
 
 
 # Constant
 
-struct Constant{T,N} <: AbstractArrayFunction{T,N}
+struct Constant{T,N} <: ArrayEvaluable{T,N}
     value :: Array{T,N}
 end
 
 # Scalars are wrapped as zero-dimensional arrays
-Constant(v::T) where T<:Number = (wrap = Array{T,0}(undef); wrap[] = v; Constant(wrap))
+Constant(v::T) where T<:Number = Constant(fill(v, ()))
 
 arguments(::Constant) = ()
 size(self::Constant) = size(self.value)
-codegen(self::Constant) = reshape(self.value, size(self.value)..., 1)
-
-
-
-# Elementwise
-
-struct Elementwise{T,N} <: AbstractArrayFunction{T,N}
-    data :: Array{T}
-    index :: AbstractFunction
-
-    function Elementwise(data::Array{T}, index) where T
-        ndims(data) > 0 || error("Expected at least a one-dimensional array")
-        restype(index) == Int || error("Index must be integer")
-        new{T, ndims(data)-1}(data, index)
-    end
-end
-
-arguments(self::Elementwise) = (self.index,)
-size(self::Elementwise) = size(self.data)[1:end-1]
-
-# Use a range for the last index to generate a dummy dimension for broadcasting
-codegen(self::Elementwise, index) = :($(self.data)[.., $index:$index])
+codegen(self::Constant) = self.value
 
 
 
 # Matmul
-# TODO: For now, this only does a single tensor contraction
+# TODO: Generalize using TensorOperations.jl when compatible
 
-struct Matmul{T,L,R,N} <: AbstractArrayFunction{T,N}
-    left :: AbstractArrayFunction{L}
-    right :: AbstractArrayFunction{R}
+struct Matmul{T,L,R,N} <: ArrayEvaluable{T,N}
+    left :: ArrayEvaluable{L}
+    right :: ArrayEvaluable{R}
 
-    function Matmul(left::AbstractArrayFunction{L}, right::AbstractArrayFunction{R}) where {L <: Number, R <: Number}
+    function Matmul(left::ArrayEvaluable{L}, right::ArrayEvaluable{R}) where {L <: Number, R <: Number}
         ndims(left) > 0 || error("Expected at least a one-dimensional array")
         ndims(right) > 0 || error("Expected at least a one-dimensional array")
-        size(left)[end] == size(right)[1] || error("Inconsistent dimensions for contraction")
-        new{promote_type(L, R), L, R, ndims(left) + ndims(right) - 2}(left, right)
+        size(left, ndims(left)) == size(right, 1) || error("Inconsistent dimensions for contraction")
+        new{promote_type(L,R), L, R, ndims(left) + ndims(right) - 2}(left, right)
     end
 end
 
 arguments(self::Matmul) = (self.left, self.right)
 size(self::Matmul) = (size(self.left)[1:end-1]..., size(self.right)[2:end]...)
 
-function codegen(self::Matmul, left, right)
-    (value, l, r, j) = gensym("value"), gensym("l"), gensym("r"), gensym("j")
-    (lrange, rrange) = gensym("lrange"), gensym("rrange"), gensym("trange")
-    code = :(matmul($left, $right))
+function codegen(self::Matmul{T,L,R,N}, left, right) where {T,L,R,N}
+    (result, i, j, k) = gensym("result"), gensym("i"), gensym("j"), gensym("k")
+    quote
+        $result = zeros($T, $(size(self)...))
+        for $i = CartesianIndices($(size(self.left)[1:end-1])), $j = CartesianIndices($(size(self.right)[2:end]))
+            @simd for $k = 1:$(size(self.right, 1))
+                $result[$i,$j] += $left[$i,$k] * $right[$k,$j]
+            end
+        end
+        $result
+    end
 end
 
 
 
-# Polynomials
+# Monomials
 
-struct Monomials{T,N} <: AbstractArrayFunction{T,N}
-    points :: AbstractArrayFunction{T}
+struct Monomials{T,N} <: ArrayEvaluable{T,N}
+    points :: ArrayEvaluable{T}
     degree :: Int
 
-    function Monomials(points::AbstractArrayFunction{T,M}, degree::Int) where {T,M}
+    function Monomials(points::ArrayEvaluable{T,M}, degree::Int) where {T,M}
         new{T,M+1}(points, degree)
     end
 end
@@ -217,7 +201,7 @@ size(self::Monomials) = (self.degree + 1, size(self.points)...)
 
 function codegen(self::Monomials, points)
     (value, j) = gensym("value"), gensym("j")
-    code = Any[:($value = zeros(Float64, $(self.degree+1), size($points)...))]
+    code = Any[:($value = zeros(Float64, $(size(self)...)))]
 
     loopcode = Any[:($value[1,$j] = 1.0)]
     for i in 1:self.degree
@@ -233,16 +217,17 @@ end
 
 # Product
 
-struct Product{T,N} <: AbstractArrayFunction{T,N}
-    terms :: Tuple{Vararg{AbstractArrayFunction}}
+struct Product{T,N} <: ArrayEvaluable{T,N}
+    terms :: Tuple{Vararg{ArrayEvaluable}}
 
-    function Product(terms::Tuple{Vararg{AbstractArrayFunction}})
+    function Product(terms::Tuple{Vararg{ArrayEvaluable}})
         newshape = broadcast_shape((size(term) for term in terms)...)
-        new{reduce(promote_type, (restype(term) for term in terms)), length(newshape)}(terms)
+        newtype = reduce(promote_type, (restype(term) for term in terms))
+        new{newtype, length(newshape)}(terms)
     end
 end
 
-Product(terms::AbstractArrayFunction...) = Product(terms)
+Product(terms...) = Product(terms)
 
 arguments(self::Product) = self.terms
 size(self::Product) = broadcast_shape((size(term) for term in self.terms)...)
@@ -260,19 +245,21 @@ end
 
 # Sum
 
-struct Sum{T,N} <: AbstractArrayFunction{T,N}
-    terms :: Tuple{Vararg{AbstractArrayFunction}}
+struct Sum{T,N} <: ArrayEvaluable{T,N}
+    terms :: Tuple{Vararg{ArrayEvaluable}}
 
-    function Sum(terms::Tuple{Vararg{AbstractArrayFunction}})
+    function Sum(terms::Tuple{Vararg{ArrayEvaluable}})
         newshape = broadcast_shape((size(term) for term in terms)...)
-        new{reduce(promote_type, (restype(term) for term in terms)), length(newshape)}(terms)
+        newtype = reduce(promote_type, (restype(term) for term in terms))
+        new{newtype, length(newshape)}(terms)
     end
 end
 
-Sum(terms::AbstractArrayFunction...) = Sum(terms)
+Sum(terms...) = Sum(terms)
 
 arguments(self::Sum) = self.terms
 size(self::Sum) = broadcast_shape((size(term) for term in self.terms)...)
+
 function codegen(self::Sum, args...)
     code = args[1]
     for arg in args[2:end]
@@ -285,6 +272,6 @@ end
 
 # Miscellaneous
 
-rootcoords(ndims::Int) = ApplyTransform(trans, points{Float64,2}, ndims)
+# rootcoords(ndims::Int) = ApplyTransform(trans, points{Float64,2}, ndims)
 
 end # module
