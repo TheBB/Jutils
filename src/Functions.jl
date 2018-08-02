@@ -151,11 +151,8 @@ end
 
 arguments(self::ApplyTransform) = (self.trans, self.arg)
 size(self::ApplyTransform) = (self.dims,)
-prealloc(self::ApplyTransform) = [:(Vector{Float64}(undef, $(self.dims)))]
-codegen(self::ApplyTransform, trans, arg, target) = quote
-    $target[:] = applytrans($arg, $trans)
-    $target
-end
+prealloc(self::ApplyTransform) = []
+codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $trans))
 
 
 
