@@ -49,22 +49,31 @@ function dependencies!(indices::OrderedDict{Evaluable,Int}, self::Evaluable)
     indices[self] = length(indices) + 1
 end
 
-function generate(func::Evaluable; show::Bool=false)
-    indices = dependencies(func)
-    symbols = Dict{Evaluable,Symbol}(func => gensym(string(index)) for (func, index) in indices)
+function _generate(func::Evaluable; show::Bool=false)
+    funcindices = dependencies(func)
+    tgtsymbols = Dict(func => gensym(string(index)) for (func, index) in funcindices)
+    allocexprs = Dict(func => prealloc(func) for func in keys(funcindices))
+    allocsymbols = Dict(func => [gensym("alloc") for _ in 1:length(exprs)] for (func, exprs) in allocexprs)
 
-    code = Array{Expr,1}()
-    for (func, index) in indices
-        argsyms = [symbols[arg] for arg in arguments(func)]
-        tgtsym = symbols[func]
-        push!(code, :($tgtsym = $(codegen(func, argsyms...))))
+    # Create the allocating function
+    alloccode = Vector{Expr}()
+    evalcode = Vector{Expr}()
+    for func = keys(funcindices)
+        for (sym, expr) in zip(allocsymbols[func], allocexprs[func])
+            push!(alloccode, :($sym = $expr))
+        end
+
+        argsyms = [tgtsymbols[arg] for arg in arguments(func)]
+        tgtsym = tgtsymbols[func]
+        push!(evalcode, :($tgtsym = $(codegen(func, argsyms..., allocsymbols[func]...))))
     end
-    code = Expr(:block, code...)
 
     typeinfo = [(:point, Vector{Float64}), (:element, Element)]
     paramlist = Expr(:parameters, (:($sym::$tp) for (sym, tp) in typeinfo)...)
-    prototype = Expr(:call, :evaluate, paramlist)
-    definition = Expr(:function, prototype, code)
+    push!(alloccode, Expr(:function, Expr(:call, :evaluate, paramlist), Expr(:block, evalcode...)))
+    push!(alloccode, :(return evaluate))
+
+    definition = Expr(:function, Expr(:call, :mkevaluate), Expr(:block, alloccode...))
 
     show && @show definition
 
@@ -73,7 +82,13 @@ function generate(func::Evaluable; show::Bool=false)
     Core.eval(mod, :(import Jutils.Transforms: applytrans))
     Core.eval(mod, :(using EllipsisNotation))
     Core.eval(mod, definition)
-    return mod.evaluate
+
+    return Base.invokelatest(mod.mkevaluate)
+end
+
+function generate(func::Evaluable; show::Bool=false)
+    mkeval = _generate(func; show=show)
+    mkeval
 end
 
 
@@ -86,6 +101,7 @@ end
 
 Base.show(io::IO, self::Argument) = print(io, "Argument($(self.expression))")
 arguments(::Argument) where T = ()
+prealloc(::Argument) = []
 codegen(self::Argument) = self.expression
 
 # Element transformation
@@ -99,6 +115,8 @@ const elemindex = Argument{Int}(:(element.index))
 # Array functions
 
 abstract type ArrayEvaluable{T,N} <: Evaluable{Array{T,N}} end
+
+arraytype(::ArrayEvaluable{T}) where T = T
 
 asarray(v::ArrayEvaluable) = v
 asarray(v::Real) = Constant(v)
@@ -118,6 +136,7 @@ struct Point{N} <: ArrayEvaluable{Float64,1} end
 
 arguments(self::Point) = ()
 size(self::Point{N}) where {T,N} = (N::Int,)
+prealloc(::Point) = []
 codegen(self::Point) = :point
 
 
@@ -132,7 +151,11 @@ end
 
 arguments(self::ApplyTransform) = (self.trans, self.arg)
 size(self::ApplyTransform) = (self.dims,)
-codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $trans))
+prealloc(self::ApplyTransform) = [:(Vector{Float64}(undef, $(self.dims)))]
+codegen(self::ApplyTransform, trans, arg, target) = quote
+    $target[:] = applytrans($arg, $trans)
+    $target
+end
 
 
 
@@ -147,7 +170,8 @@ Constant(v::T) where T<:Number = Constant(fill(v, ()))
 
 arguments(::Constant) = ()
 size(self::Constant) = size(self.value)
-codegen(self::Constant) = self.value
+prealloc(self::Constant) = [self.value]
+codegen(::Constant, alloc) = alloc
 
 
 
@@ -168,12 +192,13 @@ end
 
 arguments(self::Matmul) = (self.left, self.right)
 size(self::Matmul) = (size(self.left)[1:end-1]..., size(self.right)[2:end]...)
+prealloc(self::Matmul{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
-function codegen(self::Matmul{T,L,R,N}, left, right) where {T,L,R,N}
-    (result, i, j, k) = gensym("result"), gensym("i"), gensym("j"), gensym("k")
+function codegen(self::Matmul{T}, left, right, result) where T
+    (i, j, k) = gensym("i"), gensym("j"), gensym("k")
     quote
-        $result = zeros($T, $(size(self)...))
         for $i = CartesianIndices($(size(self.left)[1:end-1])), $j = CartesianIndices($(size(self.right)[2:end]))
+            $result[$i,$j] = zero($T)
             @simd for $k = 1:$(size(self.right, 1))
                 $result[$i,$j] += $left[$i,$k] * $right[$k,$j]
             end
@@ -197,19 +222,17 @@ end
 
 arguments(self::Monomials) = (self.points,)
 size(self::Monomials) = (self.degree + 1, size(self.points)...)
+prealloc(self::Monomials{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
-function codegen(self::Monomials, points)
-    (value, j) = gensym("value"), gensym("j")
-    code = Any[:($value = zeros(Float64, $(size(self)...)))]
+function codegen(self::Monomials, points, target)
+    j = gensym("j")
 
-    loopcode = Any[:($value[1,$j] = 1.0)]
+    loopcode = Any[:($target[1,$j] = 1.0)]
     for i in 1:self.degree
-        push!(loopcode, :($value[$(i+1),$j] = $value[$i,$j] * $points[$j]))
+        push!(loopcode, :($target[$(i+1),$j] = $target[$i,$j] * $points[$j]))
     end
-    push!(code, Expr(:for, :($j = CartesianIndices(size($points))), Expr(:block, loopcode...)))
 
-    push!(code, :($value))
-    Expr(:block, code...)
+    Expr(:block, Expr(:for, :($j = CartesianIndices(size($points))), Expr(:block, loopcode...)), target)
 end
 
 
@@ -221,7 +244,7 @@ struct Product{T,N} <: ArrayEvaluable{T,N}
 
     function Product(terms::Tuple{Vararg{ArrayEvaluable}})
         newshape = broadcast_shape((size(term) for term in terms)...)
-        newtype = reduce(promote_type, (restype(term) for term in terms))
+        newtype = reduce(promote_type, (arraytype(term) for term in terms))
         new{newtype, length(newshape)}(terms)
     end
 end
@@ -230,14 +253,15 @@ Product(terms...) = Product(terms)
 
 arguments(self::Product) = self.terms
 size(self::Product) = broadcast_shape((size(term) for term in self.terms)...)
+prealloc(self::Product{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 # Note: element-wise product!
 function codegen(self::Product, args...)
     code = args[1]
-    for arg in args[2:end]
+    for arg in args[2:end-1]
         code = :($code .* $arg)
     end
-    code
+    :($(args[end])[:] = $code; $(args[end]))
 end
 
 
@@ -249,7 +273,7 @@ struct Sum{T,N} <: ArrayEvaluable{T,N}
 
     function Sum(terms::Tuple{Vararg{ArrayEvaluable}})
         newshape = broadcast_shape((size(term) for term in terms)...)
-        newtype = reduce(promote_type, (restype(term) for term in terms))
+        newtype = reduce(promote_type, (arraytype(term) for term in terms))
         new{newtype, length(newshape)}(terms)
     end
 end
@@ -258,13 +282,14 @@ Sum(terms...) = Sum(terms)
 
 arguments(self::Sum) = self.terms
 size(self::Sum) = broadcast_shape((size(term) for term in self.terms)...)
+prealloc(self::Sum{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Sum, args...)
     code = args[1]
-    for arg in args[2:end]
+    for arg in args[2:end-1]
         code = :($code .+ $arg)
     end
-    code
+    :($(args[end])[:] = $code; $(args[end]))
 end
 
 
