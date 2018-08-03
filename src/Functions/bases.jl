@@ -3,6 +3,11 @@
 
 abstract type Evaluable{T} end
 
+arguments(self::Evaluable) = ()
+isconstant(::Any) = true
+isconstant(self::Evaluable) = all(isconstant(arg) for arg in arguments(self))
+iselconstant(::Any) = true
+iselconstant(self::Evaluable) = all(iselconstant(arg) for arg in arguments(self))
 restype(self::Evaluable{T}) where T = T
 
 ast(self::Evaluable) = ast!(self, Set{Evaluable}(), dependencies(self))

@@ -8,7 +8,7 @@ import Base: convert, size, ndims
 import ..Transforms: TransformChain
 import ..Elements: Element
 
-export ast, generate, restype
+export ast, generate, isconstant, iselconstant, restype
 export elemindex, trans, Point
 export ApplyTransform, Constant, GetItem, Inflate, Matmul, Monomials, Outer, Product, Sum
 export rootcoords
@@ -23,18 +23,22 @@ include("Functions/utils.jl")
 
 struct Argument{T} <: Evaluable{T}
     expression :: Union{Symbol, Expr}
+    isconstant :: Bool
+    iselconstant :: Bool
 end
 
 Base.show(io::IO, self::Argument) = print(io, "Argument($(self.expression))")
 arguments(::Argument) where T = ()
+isconstant(self::Argument) = self.isconstant
+iselconstant(self::Argument) = self.iselconstant
 prealloc(::Argument) = []
 codegen(self::Argument) = self.expression
 
 # Element transformation
-const trans = Argument{TransformChain}(:(element.transform))
+const trans = Argument{TransformChain}(:(element.transform), false, true)
 
 # Element index
-const elemindex = Argument{Int}(:(element.index))
+const elemindex = Argument{Int}(:(element.index), false, true)
 
 
 
@@ -43,6 +47,8 @@ const elemindex = Argument{Int}(:(element.index))
 struct Point{N} <: ArrayEvaluable{Float64,1} end
 
 arguments(self::Point) = ()
+isconstant(::Point) = false
+iselconstant(::Point) = false
 size(self::Point{N}) where {T,N} = (N::Int,)
 prealloc(::Point) = []
 codegen(self::Point) = :point
