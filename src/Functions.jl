@@ -10,87 +10,12 @@ import ..Elements: Element
 
 export ast, generate, restype
 export elemindex, trans, Point
-export ApplyTransform, Constant, Elementwise, Matmul, Monomials, Product, Sum
+export ApplyTransform, Constant, GetItem, Inflate, Matmul, Monomials, Product, Sum
 export rootcoords
 
 
-abstract type Evaluable{T} end
-
-restype(self::Evaluable{T}) where T = T
-
-ast(self::Evaluable) = ast!(self, Set{Evaluable}(), dependencies(self))
-
-function ast!(self::Evaluable, seen::Set{Evaluable}, indices::OrderedDict{Evaluable,Int})
-    self in seen && return string("%", string(indices[self]))
-
-    s = ""
-    args = Stateful(arguments(self))
-    for arg in args
-        bridge = isdone(args) ? flatten((("└ ",), repeated("  "))) : flatten((("├ ",), repeated("│ ")))
-        sublines = split(ast!(arg, seen, indices), "\n")
-        subtree = join((string(b, s) for (b, s) in zip(bridge, sublines)), "\n")
-        s = string(s, "\n", subtree)
-    end
-
-    push!(seen, self)
-    string("%", string(indices[self]), " = ", repr(self), s)
-end
-
-function dependencies(self::Evaluable)
-    indices = OrderedDict{Evaluable,Int}()
-    dependencies!(indices, self)
-    indices
-end
-
-function dependencies!(indices::OrderedDict{Evaluable,Int}, self::Evaluable)
-    haskey(indices, self) && return
-    for func in arguments(self)
-        dependencies!(indices, func)
-    end
-    indices[self] = length(indices) + 1
-end
-
-function _generate(func::Evaluable; show::Bool=false)
-    funcindices = dependencies(func)
-    tgtsymbols = Dict(func => gensym(string(index)) for (func, index) in funcindices)
-    allocexprs = Dict(func => prealloc(func) for func in keys(funcindices))
-    allocsymbols = Dict(func => [gensym("alloc") for _ in 1:length(exprs)] for (func, exprs) in allocexprs)
-
-    # Create the allocating function
-    alloccode = Vector{Expr}()
-    evalcode = Vector{Expr}()
-    for func = keys(funcindices)
-        for (sym, expr) in zip(allocsymbols[func], allocexprs[func])
-            push!(alloccode, :($sym = $expr))
-        end
-
-        argsyms = [tgtsymbols[arg] for arg in arguments(func)]
-        tgtsym = tgtsymbols[func]
-        push!(evalcode, :($tgtsym = $(codegen(func, argsyms..., allocsymbols[func]...))))
-    end
-
-    typeinfo = [(:point, Vector{Float64}), (:element, Element)]
-    paramlist = Expr(:parameters, (:($sym::$tp) for (sym, tp) in typeinfo)...)
-    push!(alloccode, Expr(:function, Expr(:call, :evaluate, paramlist), Expr(:block, evalcode...)))
-    push!(alloccode, :(return evaluate))
-
-    definition = Expr(:function, Expr(:call, :mkevaluate), Expr(:block, alloccode...))
-
-    show && @show definition
-
-    mod = Module()
-    Core.eval(mod, :(import Jutils.Elements: Element))
-    Core.eval(mod, :(import Jutils.Transforms: applytrans))
-    Core.eval(mod, :(using EllipsisNotation))
-    Core.eval(mod, definition)
-
-    return Base.invokelatest(mod.mkevaluate)
-end
-
-function generate(func::Evaluable; show::Bool=false)
-    mkeval = _generate(func; show=show)
-    mkeval
-end
+include("Functions/bases.jl")
+include("Functions/utils.jl")
 
 
 
@@ -110,24 +35,6 @@ const trans = Argument{TransformChain}(:(element.transform))
 
 # Element index
 const elemindex = Argument{Int}(:(element.index))
-
-
-
-# Array functions
-
-abstract type ArrayEvaluable{T,N} <: Evaluable{Array{T,N}} end
-
-arraytype(::ArrayEvaluable{T}) where T = T
-
-asarray(v::ArrayEvaluable) = v
-asarray(v::Real) = Constant(v)
-asarray(v::AbstractArray) = Constant(v)
-
-Base.ndims(self::ArrayEvaluable{T,N}) where {T,N} = N :: Int
-Base.size(self::ArrayEvaluable, dim::Int) = size(self)[dim]
-Base.show(io::IO, self::ArrayEvaluable) = print(io, string(typeof(self).name.name), size(self))
-Base.:+(self::ArrayEvaluable, rest...) = Sum(self, (asarray(v) for v in rest)...)
-Base.:*(self::ArrayEvaluable, rest...) = Product(self, (asarray(v) for v in rest)...)
 
 
 
@@ -174,16 +81,20 @@ codegen(::Constant, alloc) = alloc
 
 
 # GetItem
-# TODO: More general indexing expressions
+# TODO: More general indexing expressions?
 
 struct GetItem{T,N} <: ArrayEvaluable{T,N}
     value :: ArrayEvaluable
     indices :: Tuple
 
-    function GetItem(value::ArrayEvaluable{T,N}, indices...) where {T,N}
-        all(isa(i, Evaluable{Int}) || isa(i, Colon) for i in indices) || error("General indexing not supported")
+    function GetItem(value::ArrayEvaluable{T,N}, indices::Tuple) where {T,N}
+        legalindices(indices) || error("Illegal indexing expression")
+        length(indices) == ndims(value) || error("Inconsistent indexing")
+
+        # Attempt type inference. TODO: Make this more robust
         indextypes = [isa(i, Evaluable) ? restype(i) : typeof(i) for i in indices]
-        (_, rtype) = code_typed(getindex, (Array{T,N}, Colon, Int))[end]
+        (_, rtype) = code_typed(getindex, (Array{T,N}, indextypes...))[end]
+
         rtype <: Array || error("Result of indexing must be an array")
         rtype.isconcretetype || error("Result of indexing is not a concrete type")
         (RT, RN) = rtype.parameters
@@ -192,16 +103,53 @@ struct GetItem{T,N} <: ArrayEvaluable{T,N}
 end
 
 arguments(self::GetItem) = (self.value, (i for i in self.indices if isa(i, Evaluable))...)
-size(self::GetItem) = Tuple(s for (s, i) in zip(size(self.value), self.indices) if isa(i, Colon))
+size(self::GetItem) = resultsize(size(self.value), self.indices)
 prealloc(self::GetItem) = []
 
 function codegen(self::GetItem, value, varindices...)
     weaved = []
     varindices = collect(varindices)
     for s in self.indices
-        isa(s, Colon) ? push!(weaved, :(:)) : push!(weaved, popfirst!(varindices))
+        if isa(s, Colon)
+            push!(weaved, :(:))
+        elseif isa(s, Int) || isa(s, Array{Int})
+            push!(weaved, :($s))
+        else
+            push!(weaved, popfirst!(varindices))
+        end
     end
-    :($value[$(weaved...)])
+    :(view($value, $(weaved...)))
+end
+
+
+
+# Inflate
+
+struct Inflate{T,N} <: ArrayEvaluable{T,N}
+    data :: ArrayEvaluable{T}
+    indices :: Tuple{Vararg{ArrayEvaluable{Int,1}}}
+    size :: Tuple{Vararg{Int}}
+
+    function Inflate(data::ArrayEvaluable{T}, indices, shape) where T
+        legalindices(indices) || error("Illegal indexing expression")
+        length(indices) == length(shape) || error("Inconsistent indexing")
+        resultsize(shape, indices) == size(data) || error("Inconsistent size")
+        new{T,length(shape)}(data, indices, shape)
+    end
+end
+
+arguments(self::Inflate) = (self.data, (i for i in self.indices if isa(i, Evaluable))...)
+size(self::Inflate) = self.size
+prealloc(self::Inflate{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+
+function codegen(self::Inflate{T}, data, indices...) where T
+    target, varindices = indices[end], collect(indices[1:end-1])
+    weaved = indexweave(self.indices, varindices)
+    quote
+        $target[:] .= $(zero(T))
+        $target[$(weaved...)] = $data
+        $target
+    end
 end
 
 
@@ -228,8 +176,8 @@ prealloc(self::Matmul{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 function codegen(self::Matmul{T}, left, right, result) where T
     (i, j, k) = gensym("i"), gensym("j"), gensym("k")
     quote
+        $result[:] .= $(zero(T))
         for $i = CartesianIndices($(size(self.left)[1:end-1])), $j = CartesianIndices($(size(self.right)[2:end]))
-            $result[$i,$j] = zero($T)
             @simd for $k = 1:$(size(self.right, 1))
                 $result[$i,$j] += $left[$i,$k] * $right[$k,$j]
             end

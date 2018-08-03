@@ -41,6 +41,51 @@ end
 end
 
 
+@testset "GetItem" begin
+    srand(2018)
+    array = rand(Int, 4, 5, 6)
+
+    # Indexing with ints and colons
+    pfunc = GetItem(Constant(array), (3, :, :))
+    @test size(pfunc) == (5, 6)
+    func = generate(pfunc)
+    val = func(point=[0.1], element=Element(Simplex{1}(), 1, ()))
+    @test size(val) == (5, 6)
+    @test val == array[3, :, :]
+
+    # Indexing with evaluables
+    pfunc = GetItem(Constant(array), (Constant(1), :, Constant(4)))
+    @test size(pfunc) == (5,)
+    func = generate(pfunc)
+    val = func(point=[0.1], element=Element(Simplex{1}(), 1, ()))
+    @test size(val) == (5,)
+    @test val == array[1, :, 4]
+
+    # Indexing with multidimensional indices
+    pfunc = GetItem(Constant(array), (Constant([1 2; 3 4]), :, :))
+    @test size(pfunc) == (2, 2, 5, 6)
+    func = generate(pfunc)
+    val = func(point=[0.1], element=Element(Simplex{1}(), 1, ()))
+    @test size(val) == (2, 2, 5, 6)
+    @test val == array[[1 2; 3 4], :, :]
+end
+
+
+@testset "Inflate" begin
+    srand(201808031205)
+
+    data = Constant([1.0, 2.0, 3.0, 4.0])
+    index1 = Constant([1, 2, 3, 4])
+    func = generate(Inflate(data, (index1,), (4,)))
+    val = func(point=[0.1], element=Element(Simplex{1}(), 1, ()))
+    @test val == [1.0, 2.0, 3.0, 4.0]
+
+    func = generate(Inflate(data, (index1,), (7,)))
+    val = func(point=[0.1], element=Element(Simplex{1}(), 1, ()))
+    @test val == [1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0]
+end
+
+
 @testset "Matmul" begin
     srand(2018)
     lmx = rand(Float64, 3, 4)
