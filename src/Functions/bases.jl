@@ -43,22 +43,28 @@ function dependencies!(indices::OrderedDict{Evaluable,Int}, self::Evaluable)
 end
 
 
-struct CompiledFunction
+struct CompiledFunction{T}
     callable :: Function
-    restype :: DataType
 end
 
-@inline (self::CompiledFunction)(point::Vector{Float64}, element::Element) = self.callable(point, element)
+@inline function (self::CompiledFunction{T})(point::Vector{Float64}, element::Element) where T
+    self.callable(point, element)
+end
+
+restype(self::CompiledFunction{T}) where T = T
 
 
-struct CompiledArrayFunction
+struct CompiledArrayFunction{T,N}
     callable :: Function
     shape :: Tuple{Vararg{Int}}
-    restype :: DataType
 end
 
-@inline (self::CompiledArrayFunction)(point::Vector{Float64}, element::Element) = self.callable(point, element)
+@inline function (self::CompiledArrayFunction{T,N})(point::Vector{Float64}, element::Element) where {T,N}
+    self.callable(point, element)
+end
+
 Base.size(self::CompiledArrayFunction) = self.shape
+restype(self::CompiledArrayFunction{T}) where T = T
 
 
 
@@ -120,9 +126,9 @@ function _generate(infunc::Evaluable, show::Bool)
 end
 
 function generate(func::Evaluable{T}; show::Bool=false) where T
-    return CompiledFunction(_generate(func, show), T)
+    return CompiledFunction{T}(_generate(func, show))
 end
 
-function generate(func::ArrayEvaluable{T}; show::Bool=false) where T
-    return CompiledArrayFunction(_generate(func, show), size(func), T)
+function generate(func::ArrayEvaluable{T,N}; show::Bool=false) where {T,N}
+    return CompiledArrayFunction{T,N}(_generate(func, show), size(func))
 end

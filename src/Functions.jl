@@ -8,6 +8,7 @@ import ..Transforms: TransformChain
 import ..Elements: Element
 
 export ast, generate, isconstant, iselconstant, restype
+export CompiledArrayFunction, CompiledFunction
 export elemindex, trans, Point
 export ApplyTransform, Constant, GetItem, Inflate, Matmul, Monomials, Outer, Product, Sum
 export rootcoords
