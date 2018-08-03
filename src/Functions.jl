@@ -11,6 +11,7 @@ import ..Elements: Element
 export ast, generate, restype
 export elemindex, trans, Point
 export ApplyTransform, Constant, Elementwise, Matmul, Monomials, Product, Sum
+export rootcoords
 
 
 abstract type Evaluable{T} end
@@ -172,6 +173,39 @@ codegen(::Constant, alloc) = alloc
 
 
 
+# GetItem
+# TODO: More general indexing expressions
+
+struct GetItem{T,N} <: ArrayEvaluable{T,N}
+    value :: ArrayEvaluable
+    indices :: Tuple
+
+    function GetItem(value::ArrayEvaluable{T,N}, indices...) where {T,N}
+        all(isa(i, Evaluable{Int}) || isa(i, Colon) for i in indices) || error("General indexing not supported")
+        indextypes = [isa(i, Evaluable) ? restype(i) : typeof(i) for i in indices]
+        (_, rtype) = code_typed(getindex, (Array{T,N}, Colon, Int))[end]
+        rtype <: Array || error("Result of indexing must be an array")
+        rtype.isconcretetype || error("Result of indexing is not a concrete type")
+        (RT, RN) = rtype.parameters
+        new{RT,RN}(value, indices)
+    end
+end
+
+arguments(self::GetItem) = (self.value, (i for i in self.indices if isa(i, Evaluable))...)
+size(self::GetItem) = Tuple(s for (s, i) in zip(size(self.value), self.indices) if isa(i, Colon))
+prealloc(self::GetItem) = []
+
+function codegen(self::GetItem, value, varindices...)
+    weaved = []
+    varindices = collect(varindices)
+    for s in self.indices
+        isa(s, Colon) ? push!(weaved, :(:)) : push!(weaved, popfirst!(varindices))
+    end
+    :($value[$(weaved...)])
+end
+
+
+
 # Matmul
 # TODO: Generalize using TensorOperations.jl when compatible
 
@@ -293,6 +327,6 @@ end
 
 # Miscellaneous
 
-# rootcoords(ndims::Int) = ApplyTransform(trans, points{Float64,2}, ndims)
+rootcoords(ndims::Int) = ApplyTransform(trans, Point{ndims}(), ndims)
 
 end # module

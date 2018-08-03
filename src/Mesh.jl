@@ -5,7 +5,7 @@ using ..Topologies
 
 export line
 
-line(nelems::Int) = (Line(nelems), rootcoods(1))
+line(nelems::Int) = (Line(nelems), rootcoords(1))
 
 function line(nodes::StepRangeLen{T}) where T <: Real
     offset = nodes[1]
