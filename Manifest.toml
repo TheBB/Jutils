@@ -12,6 +12,18 @@ git-tree-sha1 = "38c5dc94e4d07c3b39fe4b9d8c72d9ddfc89bb91"
 uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 version = "0.3.2"
 
+[[BinDeps]]
+deps = ["Compat", "Libdl", "SHA", "URIParser"]
+git-tree-sha1 = "160d5d926e83e0970dd549ad9fe0ac3e8107e83c"
+uuid = "9e28174c-4ba2-5203-b857-d8d62c4213ee"
+version = "0.8.8"
+
+[[BinaryProvider]]
+deps = ["Compat", "Pkg", "SHA"]
+git-tree-sha1 = "94dac52c662ca793008fb689e3daf626b6139943"
+uuid = "b99e7846-7c00-51b0-8f62-c81ae34c0232"
+version = "0.3.3"
+
 [[Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
 git-tree-sha1 = "c478aec93ea90bb99c307a92df17a76131bf275f"
@@ -31,6 +43,12 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 git-tree-sha1 = "c09a512ff36dd5785ddc04fc102f2ff3b7fe05ae"
 uuid = "da5c29d0-fa7d-589e-88eb-ea29b0a81949"
 version = "0.3.0"
+
+[[FastGaussQuadrature]]
+deps = ["Compat", "LinearAlgebra", "SpecialFunctions"]
+git-tree-sha1 = "da4dbfd8e7af4aceb17c04f8f1983072bc1d4ed9"
+uuid = "442a2c76-b920-505d-bb47-c5924d526838"
+version = "0.3.1"
 
 [[InteractiveUtils]]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -74,6 +92,9 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 [[Random]]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
+[[SHA]]
+uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+
 [[Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
@@ -86,11 +107,23 @@ uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 [[SparseArrays]]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
+[[SpecialFunctions]]
+deps = ["BinDeps", "BinaryProvider", "Compat", "Libdl"]
+git-tree-sha1 = "1cf00baba50536d254f02082c90b98d6e4e1f968"
+uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
+version = "0.6.0"
+
 [[Statistics]]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [[Test]]
 uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[[URIParser]]
+deps = ["Test", "Unicode"]
+git-tree-sha1 = "6ddf8244220dfda2f17539fa8c9de20d6c575b69"
+uuid = "30578b45-9adc-5946-b283-645ec420af67"
+version = "0.4.0"
 
 [[UUIDs]]
 uuid = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"

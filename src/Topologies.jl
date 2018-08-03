@@ -7,7 +7,7 @@ using ..Transforms
 using ..Elements
 using ..Functions
 
-export Line, Lagrange, basis
+export Line, Lagrange, basis, refelems
 
 abstract type Topology{N} <: AbstractArray{Element,N} end
 struct Lagrange end
@@ -24,6 +24,8 @@ Base.IndexStyle(::Type{Line}) = IndexLinear()
     @boundscheck checkbounds(self, i)
     Element(Simplex{1}(), i, (Shift([float(i) - 1]),))
 end
+
+refelems(::Line) = (Simplex{1}(),)
 
 function basis(self::Line, ::Type{Lagrange}, degree::Int)
     dofs = 1 .+ cat((range(elemid*degree, length=degree+1) for elemid in range(0, length=self.nelems))..., dims=2)

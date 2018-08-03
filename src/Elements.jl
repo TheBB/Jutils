@@ -1,11 +1,9 @@
 module Elements
 
-using EllipsisNotation
-import Base: ndims
-
+using FastGaussQuadrature
 import ..Transforms: TransformChain
 
-export Simplex, Element
+export Simplex, Element, quadrule
 
 
 abstract type ReferenceElement end
@@ -13,14 +11,18 @@ abstract type ReferenceElement end
 
 struct Simplex{NDim} <: ReferenceElement end
 
-ndims(::Simplex{n}) where n = n
+Base.ndims(::Simplex{n}) where n = n
+function quadrule(::Simplex{1}, npts::Int)
+    (pts, wts) = gausslegendre(npts)
+    (pts .+ 1.0)/2, wts/2
+end
 
 
 struct Tensor <: ReferenceElement
     terms :: Array{Simplex}
 end
 
-ndims(self::Tensor) = sum(ndims(term) for term in self.terms)
+Base.ndims(self::Tensor) = sum(ndims(term) for term in self.terms)
 
 
 struct Element
@@ -29,6 +31,6 @@ struct Element
     transform :: TransformChain
 end
 
-ndims(self::Element) = ndims(self.reference)
+Base.ndims(self::Element) = ndims(self.reference)
 
 end # module
