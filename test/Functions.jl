@@ -128,6 +128,15 @@ end
 end
 
 
+@testset "Reshape" begin
+    srand(201808031814)
+    array = rand(Float64, 4, 5, 6)
+    func = generate(Reshape(Constant(array), (2, 5, 1, 4, 3)))
+    val = func([0.5], Element(Simplex{1}(), 1, ()))
+    @test val == reshape(array, 2, 5, 1, 4, 3)
+end
+
+
 @testset "Sum" begin
     srand(2018)
     lmx = rand(Float64, 5)

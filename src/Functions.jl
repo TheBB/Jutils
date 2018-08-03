@@ -10,7 +10,7 @@ import ..Elements: Element
 export ast, generate, isconstant, iselconstant, restype
 export CompiledArrayFunction, CompiledFunction
 export elemindex, trans, Point
-export ApplyTransform, Constant, GetItem, Inflate, Matmul, Monomials, Outer, Product, Sum
+export ApplyTransform, Constant, GetItem, Inflate, Matmul, Monomials, Outer, Product, Reshape, Sum
 export rootcoords
 
 
@@ -281,6 +281,25 @@ function codegen(self::Product, args...)
     end
     :($(args[end])[:] = $code; $(args[end]))
 end
+
+
+
+# Reshape
+
+struct Reshape{T,N} <: ArrayEvaluable{T,N}
+    source :: ArrayEvaluable{T}
+    newshape :: Tuple{Vararg{Int}}
+
+    function Reshape(source::ArrayEvaluable{T}, newshape::Tuple{Vararg{Int}}) where T
+        prod(size(source)) == prod(newshape) || error("New dimensions must be consistent with array size")
+        new{T,length(newshape)}(source, newshape)
+    end
+end
+
+arguments(self::Reshape) = (self.source,)
+Base.size(self::Reshape) = self.newshape
+prealloc(self::Reshape) = []
+codegen(self::Reshape, source) = :(reshape($source, $(self.newshape...)))
 
 
 
