@@ -68,7 +68,7 @@ function generate(func::Evaluable; show::Bool=false)
     mod = Module()
     Core.eval(mod, :(import Jutils.Elements: Element))
     Core.eval(mod, :(import Jutils.Transforms: applytrans))
-    Core.eval(mod, :(using EllipsisNotation))
+    Core.eval(mod, :(using LinearAlgebra))
     Core.eval(mod, definition)
 
     return Base.invokelatest(mod.mkevaluate)

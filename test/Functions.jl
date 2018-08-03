@@ -108,6 +108,16 @@ end
 end
 
 
+@testset "Outer" begin
+    srand(201808031341)
+    a = rand(Float64, 5)
+    b = rand(Float64, 3)
+    func = generate(Outer(Constant(a), Constant(b)); show=true)
+    val = func(point=[0.5], element=Element(Simplex{1}(), 1, ()))
+    @test val ≈ a .* b'
+end
+
+
 @testset "Product" begin
     srand(2018)
     lmx = rand(Float64, 5)

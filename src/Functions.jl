@@ -10,7 +10,7 @@ import ..Elements: Element
 
 export ast, generate, restype
 export elemindex, trans, Point
-export ApplyTransform, Constant, GetItem, Inflate, Matmul, Monomials, Product, Sum
+export ApplyTransform, Constant, GetItem, Inflate, Matmul, Monomials, Outer, Product, Sum
 export rootcoords
 
 
@@ -133,7 +133,7 @@ struct Inflate{T,N} <: ArrayEvaluable{T,N}
     function Inflate(data::ArrayEvaluable{T}, indices, shape) where T
         legalindices(indices) || error("Illegal indexing expression")
         length(indices) == length(shape) || error("Inconsistent indexing")
-        resultsize(shape, indices) == size(data) || error("Inconsistent size")
+        resultsize(shape, indices) == size(data) || error("Inconsistent dimensions")
         new{T,length(shape)}(data, indices, shape)
     end
 end
@@ -212,6 +212,39 @@ function codegen(self::Monomials, points, target)
     end
 
     Expr(:block, Expr(:for, :($j = CartesianIndices(size($points))), Expr(:block, loopcode...)), target)
+end
+
+
+
+# Outer
+
+struct Outer{T,N} <: ArrayEvaluable{T,N}
+    left :: ArrayEvaluable
+    right :: ArrayEvaluable
+
+    function Outer(left::ArrayEvaluable{L}, right::ArrayEvaluable{R}) where {L,R}
+        ndims(left) > 0 || error("Expected at least a one-dimensional array")
+        ndims(right) > 0 || error("Expected at least a one-dimensional array")
+        size(left)[2:end] == size(right)[2:end] || error("Inconsistent dimensions")
+        new{promote_type(L,R), ndims(left)+1}(left, right)
+    end
+end
+
+arguments(self::Outer) = (self.left, self.right)
+size(self::Outer) = (size(self.left, 1), size(self.right, 1), size(self.left)[2:end]...)
+prealloc(self::Outer{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+
+function codegen(self::Outer, left, right, target)
+    (i, j) = gensym("i"), gensym("j")
+    nleft = size(self.left, 1)
+    nright = size(self.right, 1)
+    colons = Tuple(Iterators.repeated(:, ndims(self) - 2))
+    quote
+        for $i = 1:$nleft, $j = 1:$nright
+            $target[$i,$j,$(colons...)] = $left[$i,$(colons...)] .* $right[$j,$(colons...)]
+        end
+        $target
+    end
 end
 
 
