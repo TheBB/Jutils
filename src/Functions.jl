@@ -3,7 +3,6 @@ module Functions
 import OrderedCollections: OrderedDict
 import Base.Broadcast: broadcast_shape
 import Base.Iterators: flatten, isdone, repeated, Stateful
-import Base: convert, size, ndims
 
 import ..Transforms: TransformChain
 import ..Elements: Element
@@ -49,7 +48,7 @@ struct Point{N} <: ArrayEvaluable{Float64,1} end
 arguments(self::Point) = ()
 isconstant(::Point) = false
 iselconstant(::Point) = false
-size(self::Point{N}) where {T,N} = (N::Int,)
+Base.size(self::Point{N}) where {T,N} = (N::Int,)
 prealloc(::Point) = []
 codegen(self::Point) = :point
 
@@ -64,7 +63,7 @@ struct ApplyTransform <: ArrayEvaluable{Float64,1}
 end
 
 arguments(self::ApplyTransform) = (self.trans, self.arg)
-size(self::ApplyTransform) = (self.dims,)
+Base.size(self::ApplyTransform) = (self.dims,)
 prealloc(self::ApplyTransform) = []
 codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $trans))
 
@@ -80,7 +79,7 @@ end
 Constant(v::T) where T<:Number = Constant(fill(v, ()))
 
 arguments(::Constant) = ()
-size(self::Constant) = size(self.value)
+Base.size(self::Constant) = size(self.value)
 prealloc(self::Constant) = [self.value]
 codegen(::Constant, alloc) = alloc
 
@@ -109,7 +108,7 @@ struct GetItem{T,N} <: ArrayEvaluable{T,N}
 end
 
 arguments(self::GetItem) = (self.value, (i for i in self.indices if isa(i, Evaluable))...)
-size(self::GetItem) = resultsize(size(self.value), self.indices)
+Base.size(self::GetItem) = resultsize(size(self.value), self.indices)
 prealloc(self::GetItem) = []
 
 function codegen(self::GetItem, value, varindices...)
@@ -145,7 +144,7 @@ struct Inflate{T,N} <: ArrayEvaluable{T,N}
 end
 
 arguments(self::Inflate) = (self.data, (i for i in self.indices if isa(i, Evaluable))...)
-size(self::Inflate) = self.size
+Base.size(self::Inflate) = self.size
 prealloc(self::Inflate{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Inflate{T}, data, indices...) where T
@@ -176,7 +175,7 @@ struct Matmul{T,L,R,N} <: ArrayEvaluable{T,N}
 end
 
 arguments(self::Matmul) = (self.left, self.right)
-size(self::Matmul) = (size(self.left)[1:end-1]..., size(self.right)[2:end]...)
+Base.size(self::Matmul) = (size(self.left)[1:end-1]..., size(self.right)[2:end]...)
 prealloc(self::Matmul{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Matmul{T}, left, right, result) where T
@@ -206,7 +205,7 @@ struct Monomials{T,N} <: ArrayEvaluable{T,N}
 end
 
 arguments(self::Monomials) = (self.points,)
-size(self::Monomials) = (self.degree + 1, size(self.points)...)
+Base.size(self::Monomials) = (self.degree + 1, size(self.points)...)
 prealloc(self::Monomials{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Monomials, points, target)
@@ -237,14 +236,14 @@ struct Outer{T,N} <: ArrayEvaluable{T,N}
 end
 
 arguments(self::Outer) = (self.left, self.right)
-size(self::Outer) = (size(self.left, 1), size(self.right, 1), size(self.left)[2:end]...)
+Base.size(self::Outer) = (size(self.left, 1), size(self.right, 1), size(self.left)[2:end]...)
 prealloc(self::Outer{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Outer, left, right, target)
     (i, j) = gensym("i"), gensym("j")
     nleft = size(self.left, 1)
     nright = size(self.right, 1)
-    colons = Tuple(Iterators.repeated(:, ndims(self) - 2))
+    colons = Tuple(repeated(:, ndims(self) - 2))
     quote
         for $i = 1:$nleft, $j = 1:$nright
             $target[$i,$j,$(colons...)] = $left[$i,$(colons...)] .* $right[$j,$(colons...)]
@@ -270,7 +269,7 @@ end
 Product(terms...) = Product(terms)
 
 arguments(self::Product) = self.terms
-size(self::Product) = broadcast_shape((size(term) for term in self.terms)...)
+Base.size(self::Product) = broadcast_shape((size(term) for term in self.terms)...)
 prealloc(self::Product{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 # Note: element-wise product!
@@ -299,7 +298,7 @@ end
 Sum(terms...) = Sum(terms)
 
 arguments(self::Sum) = self.terms
-size(self::Sum) = broadcast_shape((size(term) for term in self.terms)...)
+Base.size(self::Sum) = broadcast_shape((size(term) for term in self.terms)...)
 prealloc(self::Sum{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Sum, args...)

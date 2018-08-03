@@ -5,7 +5,7 @@ legalindices(indices::Tuple) = all(
 
 function resultsize(origsize::Tuple{Vararg{Int}}, indices::Tuple)
     length(origsize) == length(indices) || error("Inconsistent indexing")
-    Tuple(Iterators.flatten(
+    Tuple(flatten(
         isa(i, Colon) ? (s,) : isa(i, Evaluable{Int}) ? () : size(i)
         for (s, i) in zip(origsize, indices)
     ))

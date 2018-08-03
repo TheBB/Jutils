@@ -2,7 +2,6 @@ module Elements
 
 using EllipsisNotation
 import Base: ndims
-import Base.Iterators: repeated
 
 import ..Transforms: TransformChain
 
