@@ -68,7 +68,7 @@ codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $trans))
 end
 
 # Scalars are wrapped as zero-dimensional arrays
-Constant(v::T) where T<:Number = Constant(fill(v, ()))
+Constant(v::T) where T <: Number = Constant(fill(v, ()))
 
 arguments(::Constant) = ()
 Base.size(self::Constant) = size(self.value)
@@ -308,7 +308,7 @@ end
 
 @autohasheq struct Reshape{T,N} <: ArrayEvaluable{T,N}
     source :: ArrayEvaluable{T}
-    newshape :: Tuple{Vararg{Int}}
+    shape :: Shape
 
     function Reshape(source::ArrayEvaluable{T}, newshape::Tuple{Vararg{Int}}) where T
         prod(size(source)) == prod(newshape) || error("New dimensions must be consistent with array size")
@@ -317,10 +317,10 @@ end
 end
 
 arguments(self::Reshape) = (self.source,)
-Base.size(self::Reshape) = self.newshape
-simplify(self::Reshape) = Reshape(simplify(self.source), self.newshape)
+Base.size(self::Reshape) = self.shape
+simplify(self::Reshape) = Reshape(simplify(self.source), self.shape)
 prealloc(self::Reshape) = []
-codegen(self::Reshape, source) = :(reshape($source, $(self.newshape...)))
+codegen(self::Reshape, source) = :(reshape($source, $(self.shape...)))
 
 
 

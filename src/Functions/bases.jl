@@ -57,7 +57,7 @@ restype(self::CompiledFunction{T}) where T = T
 
 struct CompiledArrayFunction{T,N}
     callable :: Function
-    shape :: Tuple{Vararg{Int}}
+    shape :: Shape
 end
 
 @inline function (self::CompiledArrayFunction{T,N})(point::Vector{Float64}, element::Element) where {T,N}

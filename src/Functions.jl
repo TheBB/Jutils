@@ -20,10 +20,12 @@ export inflate, insertaxis
 export elemindex, trans, rootcoords
 
 
-include("Functions/bases.jl")
-
 # Some typedefs
 Shape = Tuple{Vararg{Int}}
+
+include("Functions/bases.jl")
+
+# More typedefs
 Index = Union{ArrayEvaluable{Int}, Colon}
 Indices = Vector{Index}
 
