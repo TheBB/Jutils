@@ -129,6 +129,7 @@ end
 
 arguments(self::Inflate) = (self.data, (i for i in self.indices if isa(i, Evaluable))...)
 Base.size(self::Inflate) = self.size
+simplify(self::Inflate) = Inflate(simplify(self.data), Tuple(simplify(i) for i in self.indices), self.size)
 prealloc(self::Inflate{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Inflate{T}, data, indices...) where T
@@ -160,6 +161,7 @@ function Base.size(self::InsertAxis)
     insertmany!(shape, self.axes, 1)
     Tuple(shape)
 end
+simplify(self::InsertAxis) = insertaxis(simplify(self.source), self.axes)
 prealloc(self::InsertAxis) = []
 codegen(self::InsertAxis, source) = :(reshape($source, $(size(self)...)))
 
@@ -182,6 +184,7 @@ end
 
 arguments(self::Matmul) = (self.left, self.right)
 Base.size(self::Matmul) = (size(self.left)[1:end-1]..., size(self.right)[2:end]...)
+simplify(self::Matmul) = mul(simplify(self.left), simplify(self.right))
 prealloc(self::Matmul{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Matmul{T}, left, right, result) where T
@@ -212,6 +215,7 @@ end
 
 arguments(self::Monomials) = (self.points,)
 Base.size(self::Monomials) = (self.degree + 1, size(self.points)...)
+simplify(self::Monomials) = Monomials(simplify(self.points), self.degree)
 prealloc(self::Monomials{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Monomials, points, target)
@@ -243,6 +247,7 @@ end
 
 arguments(self::Outer) = (self.left, self.right)
 Base.size(self::Outer) = (size(self.left, 1), size(self.right, 1), size(self.left)[2:end]...)
+simplify(self::Outer) = Outer(simplify(self.left), simplify(self.right))
 prealloc(self::Outer{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Outer, left, right, target)
@@ -276,6 +281,7 @@ Product(terms...) = Product(terms)
 
 arguments(self::Product) = self.terms
 Base.size(self::Product) = broadcast_shape((size(term) for term in self.terms)...)
+simplify(self::Product) = Product(Tuple(simplify(term) for term in self.terms))
 prealloc(self::Product{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 # Note: element-wise product!
@@ -303,6 +309,7 @@ end
 
 arguments(self::Reshape) = (self.source,)
 Base.size(self::Reshape) = self.newshape
+simplify(self::Reshape) = Reshape(simplify(self.source), self.newshape)
 prealloc(self::Reshape) = []
 codegen(self::Reshape, source) = :(reshape($source, $(self.newshape...)))
 
@@ -324,6 +331,7 @@ Sum(terms...) = Sum(terms)
 
 arguments(self::Sum) = self.terms
 Base.size(self::Sum) = broadcast_shape((size(term) for term in self.terms)...)
+simplify(self::Sum) = Sum(Tuple(simplify(term) for term in self.terms))
 prealloc(self::Sum{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Sum, args...)
