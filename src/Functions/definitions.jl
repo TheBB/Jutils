@@ -14,11 +14,20 @@ iselconstant(self::Argument) = self.iselconstant
 prealloc(::Argument) = []
 codegen(self::Argument) = self.expression
 
-# Element transformation
-const trans = Argument{TransformChain}(:(element.transform), false, true)
 
-# Element index
-const elemindex = Argument{Int}(:(element.index), false, true)
+@autohasheq struct ArrayArgument{T,N} <: ArrayEvaluable{T,N}
+    expression :: Union{Symbol, Expr}
+    isconstant :: Bool
+    iselconstant :: Bool
+    shape :: Shape
+end
+
+arguments(::ArrayArgument) where T = ()
+isconstant(self::ArrayArgument) = self.isconstant
+iselconstant(self::ArrayArgument) = self.iselconstant
+Base.size(self::ArrayArgument) = self.shape
+prealloc(::ArrayArgument) = []
+codegen(self::ArrayArgument) = self.expression
 
 
 
@@ -73,10 +82,9 @@ codegen(::Constant, alloc) = alloc
 
 @autohasheq struct GetIndex{T,N} <: ArrayEvaluable{T,N}
     value :: ArrayEvaluable
-    indices :: Tuple
+    indices :: Indices
 
-    function GetIndex(value::ArrayEvaluable{T,N}, indices::Tuple) where {T,N}
-        legalindices(indices) || error("Illegal indexing expression")
+    function GetIndex(value::ArrayEvaluable{T,N}, indices::Indices) where {T,N}
         length(indices) == ndims(value) || error("Inconsistent indexing")
 
         # Attempt type inference. TODO: Make this more robust
@@ -91,7 +99,7 @@ codegen(::Constant, alloc) = alloc
 end
 
 arguments(self::GetIndex) = (self.value, (i for i in self.indices if isa(i, Evaluable))...)
-Base.size(self::GetIndex) = resultsize(size(self.value), self.indices)
+Base.size(self::GetIndex) = index_resultsize(size(self.value), self.indices)
 simplify(self::GetIndex) = getindex(simplify(self.value), (simplify(i) for i in self.indices)...)
 prealloc(self::GetIndex) = []
 
@@ -116,31 +124,32 @@ end
 
 @autohasheq struct Inflate{T,N} <: ArrayEvaluable{T,N}
     data :: ArrayEvaluable{T}
-    indices :: Tuple
-    size :: Tuple{Vararg{Int}}
+    indices :: Indices
+    shape :: Shape
 
-    function Inflate(data::ArrayEvaluable{T}, indices, shape) where T
-        legalindices(indices) || error("Illegal indexing expression")
+    function Inflate(data::ArrayEvaluable{T}, indices::Indices, shape::Shape) where T
         length(indices) == length(shape) || error("Inconsistent indexing")
-        resultsize(shape, indices) == size(data) || error("Inconsistent dimensions")
+        index_resultsize(shape, indices) == size(data) || error("Inconsistent dimensions")
+        index_dimcheck(indices, 1, 1) || error("Multidimensional indices not supported for inflate")
         new{T,length(shape)}(data, indices, shape)
     end
 end
 
 arguments(self::Inflate) = (self.data, (i for i in self.indices if isa(i, Evaluable))...)
-Base.size(self::Inflate) = self.size
-simplify(self::Inflate) = Inflate(simplify(self.data), Tuple(simplify(i) for i in self.indices), self.size)
+Base.size(self::Inflate) = self.shape
+simplify(self::Inflate) = Inflate(simplify(self.data), Index[simplify(i) for i in self.indices], self.shape)
 prealloc(self::Inflate{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Inflate{T}, data, indices...) where T
     target, varindices = indices[end], collect(indices[1:end-1])
-    weaved = indexweave(self.indices, varindices)
+    weaved = index_weave(self.indices, varindices)
     quote
         $target[:] .= $(zero(T))
         $target[$(weaved...)] = $data
         $target
     end
 end
+
 
 
 # InsertAxis
@@ -184,7 +193,7 @@ end
 
 arguments(self::Matmul) = (self.left, self.right)
 Base.size(self::Matmul) = (size(self.left)[1:end-1]..., size(self.right)[2:end]...)
-simplify(self::Matmul) = mul(simplify(self.left), simplify(self.right))
+simplify(self::Matmul) = Matmul(simplify(self.left), simplify(self.right))
 prealloc(self::Matmul{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Matmul{T}, left, right, result) where T
@@ -281,7 +290,7 @@ Product(terms...) = Product(terms)
 
 arguments(self::Product) = self.terms
 Base.size(self::Product) = broadcast_shape((size(term) for term in self.terms)...)
-simplify(self::Product) = Product(Tuple(simplify(term) for term in self.terms))
+simplify(self::Product) = *(Tuple(simplify(term) for term in self.terms)...)
 prealloc(self::Product{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 # Note: element-wise product!

@@ -68,20 +68,15 @@ end
 
 # Indexing
 
-legalindices(indices::Tuple) = all(
-    isa(i, Int) || isa(i, Array{Int}) || isa(i, Colon) || isa(i, Evaluable{Int}) || isa(i, ArrayEvaluable{Int})
-    for i in indices
-)
+index_dimcheck(indices::Indices, low::Int=0, hi::Int=typemax(Int)) =
+    all(low <= (isa(ix, Colon) ? 1 : ndims(ix)) <= hi for ix in indices)
 
-function resultsize(origsize::Tuple{Vararg{Int}}, indices::Tuple)
-    length(origsize) == length(indices) || error("Inconsistent indexing")
-    Tuple(flatten(
-        isa(i, Colon) ? (s,) : isa(i, Evaluable{Int}) ? () : size(i)
-        for (s, i) in zip(origsize, indices)
-    ))
+function index_resultsize(shape::Shape, indices::Indices)
+    length(shape) == length(indices) || error("Inconsistent indexing")
+    Tuple(flatten(isa(ix, Colon) ? (s,) : size(ix) for (s, ix) in zip(shape, indices)))
 end
 
-function indexweave(spec::Tuple, actual)
+function index_weave(spec::Indices, actual)
     actual = collect(actual)
     weaved = []
     for s in spec
