@@ -89,6 +89,37 @@ end
 end
 
 
+@testset "InsertAxis" begin
+    srand(201808041356)
+    data = rand(Float64, 4, 5, 6)
+
+    pfunc = InsertAxis(Constant(data), [1])
+    @test size(pfunc) == (1, 4, 5, 6)
+    val = generate(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
+    @test val == reshape(data, 1, 4, 5, 6)
+
+    pfunc = InsertAxis(Constant(data), [1, 1])
+    @test size(pfunc) == (1, 1, 4, 5, 6)
+    val = generate(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
+    @test val == reshape(data, 1, 1, 4, 5, 6)
+
+    pfunc = InsertAxis(Constant(data), [2])
+    @test size(pfunc) == (4, 1, 5, 6)
+    val = generate(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
+    @test val == reshape(data, 4, 1, 5, 6)
+
+    pfunc = InsertAxis(Constant(data), [1, 2])
+    @test size(pfunc) == (1, 4, 1, 5, 6)
+    val = generate(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
+    @test val == reshape(data, 1, 4, 1, 5, 6)
+
+    pfunc = InsertAxis(Constant(data), [1, 2, 4])
+    @test size(pfunc) == (1, 4, 1, 5, 6, 1)
+    val = generate(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
+    @test val == reshape(data, 1, 4, 1, 5, 6, 1)
+end
+
+
 @testset "Matmul" begin
     srand(2018)
     lmx = rand(Float64, 3, 4)

@@ -116,7 +116,7 @@ end
 
 @autohasheq struct Inflate{T,N} <: ArrayEvaluable{T,N}
     data :: ArrayEvaluable{T}
-    indices :: Tuple{Vararg{ArrayEvaluable{Int,1}}}
+    indices :: Tuple
     size :: Tuple{Vararg{Int}}
 
     function Inflate(data::ArrayEvaluable{T}, indices, shape) where T
@@ -140,6 +140,28 @@ function codegen(self::Inflate{T}, data, indices...) where T
         $target
     end
 end
+
+
+# InsertAxis
+
+@autohasheq struct InsertAxis{T,N} <: ArrayEvaluable{T,N}
+    source :: ArrayEvaluable{T}
+    axes :: Vector{Int}
+
+    function InsertAxis(source::ArrayEvaluable{T}, axes::Vector{Int}) where T
+        all(1 <= i <= ndims(source) + 1 for i in axes) || error("Axes out of range")
+        new{T, ndims(source)+length(axes)}(source, sort(axes))
+    end
+end
+
+arguments(self::InsertAxis) = (self.source,)
+function Base.size(self::InsertAxis)
+    shape = collect(Int, size(self.source))
+    insertmany!(shape, self.axes, 1)
+    Tuple(shape)
+end
+prealloc(self::InsertAxis) = []
+codegen(self::InsertAxis, source) = :(reshape($source, $(size(self)...)))
 
 
 

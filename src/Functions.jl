@@ -10,7 +10,7 @@ import ..Elements: Element
 export ast, generate, isconstant, iselconstant, restype, simplify
 export CompiledArrayFunction, CompiledFunction
 export elemindex, trans, Point
-export ApplyTransform, Constant, GetIndex, Inflate, Matmul, Monomials, Outer, Product, Reshape, Sum
+export ApplyTransform, Constant, GetIndex, Inflate, InsertAxis, Matmul, Monomials, Outer, Product, Reshape, Sum
 export rootcoords
 
 include("Functions/bases.jl")

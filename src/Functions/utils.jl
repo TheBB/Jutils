@@ -95,3 +95,10 @@ function indexweave(spec::Tuple, actual)
     end
     weaved
 end
+
+function insertmany!(target::Vector{T}, axes, value::T) where T
+    sortaxes = reverse(sort(collect(Int, axes)))
+    for ax in sortaxes
+        insert!(target, ax, value)
+    end
+end
