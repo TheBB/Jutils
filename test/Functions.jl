@@ -38,6 +38,9 @@ end
     func = generate(Constant([1.0, 2.0, 3.0]))
     val = func([0.2], Element(Simplex{1}(), 1, ()))
     @test val == [1.0, 2.0, 3.0]
+
+    func = Sum(Constant([0.0]), Constant([0.0]))
+    @test length(Functions.dependencies(func)) == 2
 end
 
 

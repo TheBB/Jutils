@@ -1,7 +1,7 @@
 
 # Generic evaluation arguments
 
-struct Argument{T} <: Evaluable{T}
+@autohasheq struct Argument{T} <: Evaluable{T}
     expression :: Union{Symbol, Expr}
     isconstant :: Bool
     iselconstant :: Bool
@@ -24,7 +24,7 @@ const elemindex = Argument{Int}(:(element.index), false, true)
 
 # Quadrature point (reference coordinates)
 
-struct Point{N} <: ArrayEvaluable{Float64,1} end
+@autohasheq struct Point{N} <: ArrayEvaluable{Float64,1} end
 
 arguments(self::Point) = ()
 isconstant(::Point) = false
@@ -38,7 +38,7 @@ codegen(self::Point) = :point
 
 # ApplyTransform
 
-struct ApplyTransform <: ArrayEvaluable{Float64,1}
+@autohasheq struct ApplyTransform <: ArrayEvaluable{Float64,1}
     trans :: Evaluable{TransformChain}
     arg :: ArrayEvaluable{Float64,1}
     dims :: Int
@@ -54,7 +54,7 @@ codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $trans))
 
 # Constant
 
-struct Constant{T,N} <: ArrayEvaluable{T,N}
+@autohasheq struct Constant{T,N} <: ArrayEvaluable{T,N}
     value :: Array{T,N}
 end
 
@@ -71,7 +71,7 @@ codegen(::Constant, alloc) = alloc
 # GetIndex
 # TODO: More general indexing expressions?
 
-struct GetIndex{T,N} <: ArrayEvaluable{T,N}
+@autohasheq struct GetIndex{T,N} <: ArrayEvaluable{T,N}
     value :: ArrayEvaluable
     indices :: Tuple
 
@@ -114,7 +114,7 @@ end
 
 # Inflate
 
-struct Inflate{T,N} <: ArrayEvaluable{T,N}
+@autohasheq struct Inflate{T,N} <: ArrayEvaluable{T,N}
     data :: ArrayEvaluable{T}
     indices :: Tuple{Vararg{ArrayEvaluable{Int,1}}}
     size :: Tuple{Vararg{Int}}
@@ -146,7 +146,7 @@ end
 # Matmul
 # TODO: Generalize using TensorOperations.jl when compatible
 
-struct Matmul{T,L,R,N} <: ArrayEvaluable{T,N}
+@autohasheq struct Matmul{T,L,R,N} <: ArrayEvaluable{T,N}
     left :: ArrayEvaluable{L}
     right :: ArrayEvaluable{R}
 
@@ -179,7 +179,7 @@ end
 
 # Monomials
 
-struct Monomials{T,N} <: ArrayEvaluable{T,N}
+@autohasheq struct Monomials{T,N} <: ArrayEvaluable{T,N}
     points :: ArrayEvaluable{T}
     degree :: Int
 
@@ -207,7 +207,7 @@ end
 
 # Outer
 
-struct Outer{T,N} <: ArrayEvaluable{T,N}
+@autohasheq struct Outer{T,N} <: ArrayEvaluable{T,N}
     left :: ArrayEvaluable
     right :: ArrayEvaluable
 
@@ -240,7 +240,7 @@ end
 
 # Product
 
-struct Product{T,N} <: ArrayEvaluable{T,N}
+@autohasheq struct Product{T,N} <: ArrayEvaluable{T,N}
     terms :: Tuple{Vararg{ArrayEvaluable}}
 
     function Product(terms::Tuple{Vararg{ArrayEvaluable}})
@@ -269,7 +269,7 @@ end
 
 # Reshape
 
-struct Reshape{T,N} <: ArrayEvaluable{T,N}
+@autohasheq struct Reshape{T,N} <: ArrayEvaluable{T,N}
     source :: ArrayEvaluable{T}
     newshape :: Tuple{Vararg{Int}}
 
@@ -288,7 +288,7 @@ codegen(self::Reshape, source) = :(reshape($source, $(self.newshape...)))
 
 # Sum
 
-struct Sum{T,N} <: ArrayEvaluable{T,N}
+@autohasheq struct Sum{T,N} <: ArrayEvaluable{T,N}
     terms :: Tuple{Vararg{ArrayEvaluable}}
 
     function Sum(terms::Tuple{Vararg{ArrayEvaluable}})
