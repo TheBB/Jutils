@@ -19,7 +19,7 @@ function ast!(self::Evaluable, seen::Set{Evaluable}, indices::OrderedDict{Evalua
     s = ""
     args = Stateful(arguments(self))
     for arg in args
-        bridge = isdone(args) ? flatten((("└ ",), repeated("  "))) : flatten((("├ ",), repeated("│ ")))
+        bridge = isdone(args) ? flatten((("└─",), repeated("  "))) : flatten((("├─",), repeated("│ ")))
         sublines = split(ast!(arg, seen, indices), "\n")
         subtree = join((string(b, s) for (b, s) in zip(bridge, sublines)), "\n")
         s = string(s, "\n", subtree)
