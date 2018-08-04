@@ -46,7 +46,7 @@ end
     array = rand(Int, 4, 5, 6)
 
     # Indexing with ints and colons
-    pfunc = GetItem(Constant(array), (3, :, :))
+    pfunc = GetIndex(Constant(array), (3, :, :))
     @test size(pfunc) == (5, 6)
     func = generate(pfunc)
     val = func([0.1], Element(Simplex{1}(), 1, ()))
@@ -54,7 +54,7 @@ end
     @test val == array[3, :, :]
 
     # Indexing with evaluables
-    pfunc = GetItem(Constant(array), (Constant(1), :, Constant(4)))
+    pfunc = GetIndex(Constant(array), (Constant(1), :, Constant(4)))
     @test size(pfunc) == (5,)
     func = generate(pfunc)
     val = func([0.1], Element(Simplex{1}(), 1, ()))
@@ -62,7 +62,7 @@ end
     @test val == array[1, :, 4]
 
     # Indexing with multidimensional indices
-    pfunc = GetItem(Constant(array), (Constant([1 2; 3 4]), :, :))
+    pfunc = GetIndex(Constant(array), (Constant([1 2; 3 4]), :, :))
     @test size(pfunc) == (2, 2, 5, 6)
     func = generate(pfunc)
     val = func([0.1], Element(Simplex{1}(), 1, ()))
