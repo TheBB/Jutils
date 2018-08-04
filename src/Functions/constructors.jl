@@ -39,12 +39,15 @@ Base.:*(left::ArrayEvaluable, right::ArrayEvaluable) = Product((left, right))
 
 # Ensure that Inflate commutes past Product
 function Base.:*(left::Inflate, right::Inflate)
-    @show size(left.data), left.indices, size(left)
-    @show size(right.data), right.indices, size(right)
+    any(!isa(l, Colon) && !isa(r, Colon) for (l,r) in zip(left.indices, right.indices)) &&
+        error("Joining inflations with overlapping axes not supported")
+    ndims(left) == ndims(right) ||
+        error("Joining inflations with different number of dimensions not supported")
 
-    # If necessary, wrap sources in InsertAxis so they have the final number of dimensions
-
-    Product((left, right))
+    newdata = left.data * right.data
+    newindices = Index[isa(l, Colon) ? r : l for (l,r) in zip(left.indices, right.indices)]
+    newshape = broadcast_shape(size(left), size(right))
+    inflate(newdata, newindices, newshape)
 end
 
 
