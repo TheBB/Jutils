@@ -240,40 +240,6 @@ end
 
 
 
-# Outer
-
-@autohasheq struct Outer{T,N} <: ArrayEvaluable{T,N}
-    left :: ArrayEvaluable
-    right :: ArrayEvaluable
-
-    function Outer(left::ArrayEvaluable{L}, right::ArrayEvaluable{R}) where {L,R}
-        ndims(left) > 0 || error("Expected at least a one-dimensional array")
-        ndims(right) > 0 || error("Expected at least a one-dimensional array")
-        size(left)[2:end] == size(right)[2:end] || error("Inconsistent dimensions")
-        new{promote_type(L,R), ndims(left)+1}(left, right)
-    end
-end
-
-arguments(self::Outer) = (self.left, self.right)
-Base.size(self::Outer) = (size(self.left, 1), size(self.right, 1), size(self.left)[2:end]...)
-optimize(self::Outer) = Outer(optimize(self.left), optimize(self.right))
-prealloc(self::Outer{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
-
-function codegen(self::Outer, left, right, target)
-    (i, j) = gensym("i"), gensym("j")
-    nleft = size(self.left, 1)
-    nright = size(self.right, 1)
-    colons = Tuple(repeated(:, ndims(self) - 2))
-    quote
-        for $i = 1:$nleft, $j = 1:$nright
-            $target[$i,$j,$(colons...)] = $left[$i,$(colons...)] .* $right[$j,$(colons...)]
-        end
-        $target
-    end
-end
-
-
-
 # Product
 
 @autohasheq struct Product{T,N} <: ArrayEvaluable{T,N}
@@ -301,26 +267,6 @@ function codegen(self::Product, args...)
     end
     :($(args[end])[:] = $code; $(args[end]))
 end
-
-
-
-# Reshape
-
-@autohasheq struct Reshape{T,N} <: ArrayEvaluable{T,N}
-    source :: ArrayEvaluable{T}
-    shape :: Shape
-
-    function Reshape(source::ArrayEvaluable{T}, newshape::Tuple{Vararg{Int}}) where T
-        prod(size(source)) == prod(newshape) || error("New dimensions must be consistent with array size")
-        new{T,length(newshape)}(source, newshape)
-    end
-end
-
-arguments(self::Reshape) = (self.source,)
-Base.size(self::Reshape) = self.shape
-optimize(self::Reshape) = Reshape(optimize(self.source), self.shape)
-prealloc(self::Reshape) = []
-codegen(self::Reshape, source) = :(reshape($source, $(self.shape...)))
 
 
 

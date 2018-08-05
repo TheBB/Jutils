@@ -142,16 +142,6 @@ end
 end
 
 
-@testset "Outer" begin
-    srand(201808031341)
-    a = rand(Float64, 5)
-    b = rand(Float64, 3)
-    func = compile(Outer(Constant(a), Constant(b)))
-    val = func([0.5], Element(Simplex{1}(), 1, ()))
-    @test val ≈ a .* b'
-end
-
-
 @testset "Product" begin
     srand(2018)
     lmx = rand(Float64, 5)
@@ -159,15 +149,6 @@ end
     func = compile(Product(Constant(lmx), Constant(rmx)))
     val = func([0.5], Element(Simplex{1}(), 1, ()))
     @test val ≈ lmx .* rmx
-end
-
-
-@testset "Reshape" begin
-    srand(201808031814)
-    array = rand(Float64, 4, 5, 6)
-    func = compile(Reshape(Constant(array), (2, 5, 1, 4, 3)))
-    val = func([0.5], Element(Simplex{1}(), 1, ()))
-    @test val == reshape(array, 2, 5, 1, 4, 3)
 end
 
 
