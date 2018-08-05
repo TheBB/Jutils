@@ -44,6 +44,9 @@ function dependencies!(indices::OrderedDict{Evaluable,Int}, self::Evaluable)
 end
 
 
+
+# Compiled functions
+
 struct CompiledFunction{T}
     callable :: Function
 end
@@ -68,6 +71,17 @@ Base.size(self::CompiledDenseArrayFunction) = self.shape
 restype(self::CompiledDenseArrayFunction{T}) where T = T
 
 
+struct CompiledSparseArrayFunction{T,N}
+    indices :: CompiledFunction
+    data :: CompiledFunction
+    blockshapes :: Vector{Shape}
+    shape :: Shape
+end
+
+Base.size(self::CompiledSparseArrayFunction) = self.shape
+restype(self::CompiledSparseArrayFunction{T}) where T = T
+
+
 
 # Array functions
 
@@ -84,6 +98,8 @@ Base.size(self::ArrayEvaluable, dim::Int) = size(self)[dim]
 Base.show(io::IO, self::ArrayEvaluable) = print(io, string(typeof(self).name.name), size(self))
 Base.:+(self::ArrayEvaluable, rest...) = Sum(self, (asarray(v) for v in rest)...)
 Base.:*(self::ArrayEvaluable, rest...) = Product(self, (asarray(v) for v in rest)...)
+
+separate(self::ArrayEvaluable) = [(Tuple(Constant(collect(1:n)) for n in size(self)), self)]
 
 
 
@@ -126,10 +142,18 @@ function _compile(infunc::Evaluable, show::Bool)
     Base.invokelatest(mod.mkevaluate)
 end
 
-function compile(func::Evaluable{T}; show::Bool=false) where T
-    return CompiledFunction{T}(_compile(func, show))
-end
+compile(func::Evaluable{T}; show::Bool=false) where T = CompiledFunction{T}(_compile(func, show))
 
-function compile(func::ArrayEvaluable{T,N}; show::Bool=false) where {T,N}
-    return CompiledDenseArrayFunction{T,N}(_compile(func, show), size(func))
+function compile(func::ArrayEvaluable{T,N}; show::Bool=false, dense::Bool=true) where {T,N}
+    if dense
+        CompiledDenseArrayFunction{T,N}(_compile(func, show), size(func))
+    else
+        blocks = separate(func)
+        indices = Tupl((Tupl(inds...) for (inds, _) in blocks)...)
+        data = Tupl((data for (_, data) in blocks)...)
+        blockshapes = Shape[size(data) for (_, data) in blocks]
+
+        iselconstant(indices) || error("Index function must be elementwise constant")
+        CompiledSparseArrayFunction{T,N}(compile(indices; show=show), compile(data; show=show), blockshapes, size(func))
+    end
 end

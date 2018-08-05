@@ -138,6 +138,10 @@ end
 arguments(self::Inflate) = (self.data, (i for i in self.indices if isa(i, Evaluable))...)
 Base.size(self::Inflate) = self.shape
 optimize(self::Inflate) = Inflate(optimize(self.data), Index[optimize(i) for i in self.indices], self.shape)
+separate(self::Inflate) = [
+    ((((isa(ix, Colon) ? ind : getindex(ix, ind)) for (ix, ind) in zip(self.indices, inds))...,), data)
+    for (inds, data) in separate(self.data)
+]
 prealloc(self::Inflate{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Inflate{T}, data, indices...) where T
