@@ -45,7 +45,7 @@ end
 
 
 @testset "GetIndex" begin
-    srand(201808041834)
+    Random.seed!(201808041834)
     array = rand(Int, 4, 5, 6)
 
     # Indexing with ints and colons
@@ -75,7 +75,7 @@ end
 
 
 @testset "Inflate" begin
-    srand(201808031205)
+    Random.seed!(201808031205)
 
     data = Constant([1.0, 2.0, 3.0, 4.0])
     index1 = Constant([1, 2, 3, 4])
@@ -90,7 +90,7 @@ end
 
 
 @testset "InsertAxis" begin
-    srand(201808041356)
+    Random.seed!(201808041356)
     data = rand(Float64, 4, 5, 6)
 
     pfunc = InsertAxis(Constant(data), [1])
@@ -121,7 +121,7 @@ end
 
 
 @testset "Matmul" begin
-    srand(2018)
+    Random.seed!(2018)
     lmx = rand(Float64, 3, 4)
     rmx = rand(Float64, 4, 2)
     func = compile(Matmul(Constant(lmx), Constant(rmx)))
@@ -131,7 +131,7 @@ end
 
 
 @testset "Monomials" begin
-    srand(2018)
+    Random.seed!(2018)
     pts = rand(Float64, 2, 2)
     func = compile(Monomials(Constant(pts), 3))
     val = func([0.5], Element(Simplex{1}(), 1, ()))
@@ -143,7 +143,7 @@ end
 
 
 @testset "Product" begin
-    srand(2018)
+    Random.seed!(2018)
     lmx = rand(Float64, 5)
     rmx = rand(Float64, 5, 9)
     func = compile(Product(Constant(lmx), Constant(rmx)))
@@ -153,7 +153,7 @@ end
 
 
 @testset "Sum" begin
-    srand(2018)
+    Random.seed!(2018)
     lmx = rand(Float64, 5)
     rmx = rand(Float64, 5, 9)
     func = compile(Sum(Constant(lmx), Constant(rmx)))
