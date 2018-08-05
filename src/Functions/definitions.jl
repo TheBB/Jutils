@@ -350,3 +350,21 @@ function codegen(self::Sum, args...)
     end
     :($(args[end])[:] = $code; $(args[end]))
 end
+
+
+
+# Tupl(e)
+
+@autohasheq struct Tupl{T} <: Evaluable{T}
+    terms :: Tuple{Vararg{Evaluable}}
+
+    function Tupl(terms::Evaluable...)
+        # TODO: Is there a better way to do this?
+        tupletype = eval(:(Tuple{$((restype(term) for term in terms)...)}))
+        new{tupletype}(terms)
+    end
+end
+
+arguments(self::Tupl) = self.terms
+prealloc(self::Tupl) = []
+codegen(self::Tupl, terms...) = :($(terms...),)

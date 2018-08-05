@@ -179,3 +179,10 @@ end
     val = func([0.5], Element(Simplex{1}(), 1, ()))
     @test val ≈ lmx .+ rmx
 end
+
+
+@testset "Tupl" begin
+    func = compile(Tupl(Constant(1), Constant(2.0)))
+    val = func([0.5], Element(Simplex{1}(), 1, ()))
+    @test val == (fill(1, ()), fill(2.0, ()))
+end
