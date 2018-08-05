@@ -6,7 +6,7 @@ using Jutils.Transforms
 
 
 @testset "Argument" begin
-    func = generate(trans)
+    func = compile(trans)
     val = func([0.5], Element(Simplex{1}(), 1, ()))
     @test val == ()
 
@@ -16,7 +16,7 @@ end
 
 
 @testset "ApplyTransform" begin
-    func = generate(ApplyTransform(trans, Point{1}(), 1))
+    func = compile(ApplyTransform(trans, Point{1}(), 1))
 
     val = func([0.5], Element(Simplex{1}(), 1, ()))
     @test val == [0.5]
@@ -27,15 +27,15 @@ end
 
 
 @testset "Constant" begin
-    func = generate(Constant(1.0))
+    func = compile(Constant(1.0))
     val = func([0.5], Element(Simplex{1}(), 1, ()))
     @test val == fill(1.0, ())
 
-    func = generate(Constant([1.0]))
+    func = compile(Constant([1.0]))
     val = func([0.5], Element(Simplex{1}(), 1, ()))
     @test val == [1.0]
 
-    func = generate(Constant([1.0, 2.0, 3.0]))
+    func = compile(Constant([1.0, 2.0, 3.0]))
     val = func([0.2], Element(Simplex{1}(), 1, ()))
     @test val == [1.0, 2.0, 3.0]
 
@@ -51,7 +51,7 @@ end
     # Indexing with ints and colons
     pfunc = getindex(Constant(array), 3, :, :)
     @test size(pfunc) == (5, 6)
-    func = generate(pfunc)
+    func = compile(pfunc)
     val = func([0.1], Element(Simplex{1}(), 1, ()))
     @test size(val) == (5, 6)
     @test val == array[3, :, :]
@@ -59,7 +59,7 @@ end
     # Indexing with evaluables
     pfunc = getindex(Constant(array), Constant(1), :, Constant(4))
     @test size(pfunc) == (5,)
-    func = generate(pfunc)
+    func = compile(pfunc)
     val = func([0.1], Element(Simplex{1}(), 1, ()))
     @test size(val) == (5,)
     @test val == array[1, :, 4]
@@ -67,7 +67,7 @@ end
     # Indexing with multidimensional indices
     pfunc = getindex(Constant(array), [1 2; 3 4], :, :)
     @test size(pfunc) == (2, 2, 5, 6)
-    func = generate(pfunc)
+    func = compile(pfunc)
     val = func([0.1], Element(Simplex{1}(), 1, ()))
     @test size(val) == (2, 2, 5, 6)
     @test val == array[[1 2; 3 4], :, :]
@@ -79,11 +79,11 @@ end
 
     data = Constant([1.0, 2.0, 3.0, 4.0])
     index1 = Constant([1, 2, 3, 4])
-    func = generate(inflate(data, [index1], (4,)))
+    func = compile(inflate(data, [index1], (4,)))
     val = func([0.1], Element(Simplex{1}(), 1, ()))
     @test val == [1.0, 2.0, 3.0, 4.0]
 
-    func = generate(inflate(data, [index1], (7,)))
+    func = compile(inflate(data, [index1], (7,)))
     val = func([0.1], Element(Simplex{1}(), 1, ()))
     @test val == [1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0]
 end
@@ -95,27 +95,27 @@ end
 
     pfunc = InsertAxis(Constant(data), [1])
     @test size(pfunc) == (1, 4, 5, 6)
-    val = generate(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
+    val = compile(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
     @test val == reshape(data, 1, 4, 5, 6)
 
     pfunc = InsertAxis(Constant(data), [1, 1])
     @test size(pfunc) == (1, 1, 4, 5, 6)
-    val = generate(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
+    val = compile(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
     @test val == reshape(data, 1, 1, 4, 5, 6)
 
     pfunc = InsertAxis(Constant(data), [2])
     @test size(pfunc) == (4, 1, 5, 6)
-    val = generate(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
+    val = compile(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
     @test val == reshape(data, 4, 1, 5, 6)
 
     pfunc = InsertAxis(Constant(data), [1, 2])
     @test size(pfunc) == (1, 4, 1, 5, 6)
-    val = generate(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
+    val = compile(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
     @test val == reshape(data, 1, 4, 1, 5, 6)
 
     pfunc = InsertAxis(Constant(data), [1, 2, 4])
     @test size(pfunc) == (1, 4, 1, 5, 6, 1)
-    val = generate(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
+    val = compile(pfunc)([0.5], Element(Simplex{1}(), 1, ()))
     @test val == reshape(data, 1, 4, 1, 5, 6, 1)
 end
 
@@ -124,7 +124,7 @@ end
     srand(2018)
     lmx = rand(Float64, 3, 4)
     rmx = rand(Float64, 4, 2)
-    func = generate(Matmul(Constant(lmx), Constant(rmx)))
+    func = compile(Matmul(Constant(lmx), Constant(rmx)))
     val = func([0.5], Element(Simplex{1}(), 1, ()))
     @test val ≈ lmx * rmx
 end
@@ -133,7 +133,7 @@ end
 @testset "Monomials" begin
     srand(2018)
     pts = rand(Float64, 2, 2)
-    func = generate(Monomials(Constant(pts), 3))
+    func = compile(Monomials(Constant(pts), 3))
     val = func([0.5], Element(Simplex{1}(), 1, ()))
     @test val[1,:,:] == fill(1.0, 2, 2)
     @test val[2,:,:] ≈ pts
@@ -146,7 +146,7 @@ end
     srand(201808031341)
     a = rand(Float64, 5)
     b = rand(Float64, 3)
-    func = generate(Outer(Constant(a), Constant(b)))
+    func = compile(Outer(Constant(a), Constant(b)))
     val = func([0.5], Element(Simplex{1}(), 1, ()))
     @test val ≈ a .* b'
 end
@@ -156,7 +156,7 @@ end
     srand(2018)
     lmx = rand(Float64, 5)
     rmx = rand(Float64, 5, 9)
-    func = generate(Product(Constant(lmx), Constant(rmx)))
+    func = compile(Product(Constant(lmx), Constant(rmx)))
     val = func([0.5], Element(Simplex{1}(), 1, ()))
     @test val ≈ lmx .* rmx
 end
@@ -165,7 +165,7 @@ end
 @testset "Reshape" begin
     srand(201808031814)
     array = rand(Float64, 4, 5, 6)
-    func = generate(Reshape(Constant(array), (2, 5, 1, 4, 3)))
+    func = compile(Reshape(Constant(array), (2, 5, 1, 4, 3)))
     val = func([0.5], Element(Simplex{1}(), 1, ()))
     @test val == reshape(array, 2, 5, 1, 4, 3)
 end
@@ -175,7 +175,7 @@ end
     srand(2018)
     lmx = rand(Float64, 5)
     rmx = rand(Float64, 5, 9)
-    func = generate(Sum(Constant(lmx), Constant(rmx)))
+    func = compile(Sum(Constant(lmx), Constant(rmx)))
     val = func([0.5], Element(Simplex{1}(), 1, ()))
     @test val ≈ lmx .+ rmx
 end

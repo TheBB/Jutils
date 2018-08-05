@@ -1,13 +1,13 @@
 module Integration
 
 import ..Elements: ReferenceElement, quadrule
-import ..Functions: CompiledArrayFunction
+import ..Functions: CompiledDenseArrayFunction
 import ..Topologies: Topology, Line, refelems
 
-export integrate_dense
+export integrate
 
 
-function integrate_dense(func::CompiledArrayFunction{T}, domain::Topology, npts::Int) where T
+function integrate(func::CompiledDenseArrayFunction{T}, domain::Topology, npts::Int) where T
     quadrules = Dict{ReferenceElement, Tuple{Vector{Float64}, Vector{Float64}}}(
         elem => quadrule(elem, npts) for elem in refelems(domain)
     )

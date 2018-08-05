@@ -9,7 +9,7 @@ isconstant(self::Evaluable) = all(isconstant(arg) for arg in arguments(self))
 iselconstant(::Any) = true
 iselconstant(self::Evaluable) = all(iselconstant(arg) for arg in arguments(self))
 restype(self::Evaluable{T}) where T = T
-simplify(x::Any) = x
+optimize(x::Any) = x
 
 ast(self::Evaluable) = ast!(self, Set{Evaluable}(), dependencies(self))
 
@@ -55,17 +55,17 @@ end
 restype(self::CompiledFunction{T}) where T = T
 
 
-struct CompiledArrayFunction{T,N}
+struct CompiledDenseArrayFunction{T,N}
     callable :: Function
     shape :: Shape
 end
 
-@inline function (self::CompiledArrayFunction{T,N})(point::Vector{Float64}, element::Element) where {T,N}
+@inline function (self::CompiledDenseArrayFunction{T,N})(point::Vector{Float64}, element::Element) where {T,N}
     self.callable(point, element)
 end
 
-Base.size(self::CompiledArrayFunction) = self.shape
-restype(self::CompiledArrayFunction{T}) where T = T
+Base.size(self::CompiledDenseArrayFunction) = self.shape
+restype(self::CompiledDenseArrayFunction{T}) where T = T
 
 
 
@@ -89,7 +89,7 @@ Base.:*(self::ArrayEvaluable, rest...) = Product(self, (asarray(v) for v in rest
 
 # Compilation
 
-function _generate(infunc::Evaluable, show::Bool)
+function _compile(infunc::Evaluable, show::Bool)
     funcindices = dependencies(infunc)
     tgtsymbols = Dict(func => gensym(string(index)) for (func, index) in funcindices)
     allocexprs = Dict(func => prealloc(func) for func in keys(funcindices))
@@ -126,10 +126,10 @@ function _generate(infunc::Evaluable, show::Bool)
     Base.invokelatest(mod.mkevaluate)
 end
 
-function generate(func::Evaluable{T}; show::Bool=false) where T
-    return CompiledFunction{T}(_generate(func, show))
+function compile(func::Evaluable{T}; show::Bool=false) where T
+    return CompiledFunction{T}(_compile(func, show))
 end
 
-function generate(func::ArrayEvaluable{T,N}; show::Bool=false) where {T,N}
-    return CompiledArrayFunction{T,N}(_generate(func, show), size(func))
+function compile(func::ArrayEvaluable{T,N}; show::Bool=false) where {T,N}
+    return CompiledDenseArrayFunction{T,N}(_compile(func, show), size(func))
 end

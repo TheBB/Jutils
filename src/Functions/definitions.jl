@@ -39,7 +39,7 @@ arguments(self::Point) = ()
 isconstant(::Point) = false
 iselconstant(::Point) = false
 Base.size(self::Point{N}) where {T,N} = (N::Int,)
-simplify(self::Point) = self
+optimize(self::Point) = self
 prealloc(::Point) = []
 codegen(self::Point) = :point
 
@@ -55,7 +55,7 @@ end
 
 arguments(self::ApplyTransform) = (self.trans, self.arg)
 Base.size(self::ApplyTransform) = (self.dims,)
-simplify(self::ApplyTransform) = ApplyTransform(simplify(self.trans), simplify(self.arg), dims)
+optimize(self::ApplyTransform) = ApplyTransform(optimize(self.trans), optimize(self.arg), dims)
 prealloc(self::ApplyTransform) = []
 codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $trans))
 
@@ -100,7 +100,7 @@ end
 
 arguments(self::GetIndex) = (self.value, (i for i in self.indices if isa(i, Evaluable))...)
 Base.size(self::GetIndex) = index_resultsize(size(self.value), self.indices)
-simplify(self::GetIndex) = getindex(simplify(self.value), (simplify(i) for i in self.indices)...)
+optimize(self::GetIndex) = getindex(optimize(self.value), (optimize(i) for i in self.indices)...)
 prealloc(self::GetIndex) = []
 
 function codegen(self::GetIndex, value, varindices...)
@@ -137,7 +137,7 @@ end
 
 arguments(self::Inflate) = (self.data, (i for i in self.indices if isa(i, Evaluable))...)
 Base.size(self::Inflate) = self.shape
-simplify(self::Inflate) = Inflate(simplify(self.data), Index[simplify(i) for i in self.indices], self.shape)
+optimize(self::Inflate) = Inflate(optimize(self.data), Index[optimize(i) for i in self.indices], self.shape)
 prealloc(self::Inflate{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Inflate{T}, data, indices...) where T
@@ -170,7 +170,7 @@ function Base.size(self::InsertAxis)
     insertmany!(shape, self.axes, 1)
     Tuple(shape)
 end
-simplify(self::InsertAxis) = insertaxis(simplify(self.source), self.axes)
+optimize(self::InsertAxis) = insertaxis(optimize(self.source), self.axes)
 prealloc(self::InsertAxis) = []
 codegen(self::InsertAxis, source) = :(reshape($source, $(size(self)...)))
 
@@ -193,7 +193,7 @@ end
 
 arguments(self::Matmul) = (self.left, self.right)
 Base.size(self::Matmul) = (size(self.left)[1:end-1]..., size(self.right)[2:end]...)
-simplify(self::Matmul) = Matmul(simplify(self.left), simplify(self.right))
+optimize(self::Matmul) = Matmul(optimize(self.left), optimize(self.right))
 prealloc(self::Matmul{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Matmul{T}, left, right, result) where T
@@ -224,7 +224,7 @@ end
 
 arguments(self::Monomials) = (self.points,)
 Base.size(self::Monomials) = (self.degree + 1, size(self.points)...)
-simplify(self::Monomials) = Monomials(simplify(self.points), self.degree)
+optimize(self::Monomials) = Monomials(optimize(self.points), self.degree)
 prealloc(self::Monomials{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Monomials, points, target)
@@ -256,7 +256,7 @@ end
 
 arguments(self::Outer) = (self.left, self.right)
 Base.size(self::Outer) = (size(self.left, 1), size(self.right, 1), size(self.left)[2:end]...)
-simplify(self::Outer) = Outer(simplify(self.left), simplify(self.right))
+optimize(self::Outer) = Outer(optimize(self.left), optimize(self.right))
 prealloc(self::Outer{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Outer, left, right, target)
@@ -290,7 +290,7 @@ Product(terms...) = Product(terms)
 
 arguments(self::Product) = self.terms
 Base.size(self::Product) = broadcast_shape((size(term) for term in self.terms)...)
-simplify(self::Product) = *(Tuple(simplify(term) for term in self.terms)...)
+optimize(self::Product) = *(Tuple(optimize(term) for term in self.terms)...)
 prealloc(self::Product{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 # Note: element-wise product!
@@ -318,7 +318,7 @@ end
 
 arguments(self::Reshape) = (self.source,)
 Base.size(self::Reshape) = self.shape
-simplify(self::Reshape) = Reshape(simplify(self.source), self.shape)
+optimize(self::Reshape) = Reshape(optimize(self.source), self.shape)
 prealloc(self::Reshape) = []
 codegen(self::Reshape, source) = :(reshape($source, $(self.shape...)))
 
@@ -340,7 +340,7 @@ Sum(terms...) = Sum(terms)
 
 arguments(self::Sum) = self.terms
 Base.size(self::Sum) = broadcast_shape((size(term) for term in self.terms)...)
-simplify(self::Sum) = Sum(Tuple(simplify(term) for term in self.terms))
+optimize(self::Sum) = Sum(Tuple(optimize(term) for term in self.terms))
 prealloc(self::Sum{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Sum, args...)

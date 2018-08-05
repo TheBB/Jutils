@@ -8,8 +8,8 @@ import ..Transforms: TransformChain
 import ..Elements: Element
 
 # Base exports
-export ast, generate, isconstant, iselconstant, restype, simplify
-export CompiledArrayFunction, CompiledFunction
+export ast, compile, isconstant, iselconstant, optimize, restype
+export CompiledDenseArrayFunction, CompiledFunction
 
 # Type exports
 export Shape, Index, Indices
