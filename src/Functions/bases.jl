@@ -142,11 +142,12 @@ function _compile(infunc::Evaluable, show::Bool)
     Base.invokelatest(mod.mkevaluate)
 end
 
-compile(func::Evaluable{T}; show::Bool=false) where T = CompiledFunction{T}(_compile(func, show))
+compile(func::Evaluable{T}; show::Bool=false) where T =
+    CompiledFunction{T}(Base.invokelatest(_compile, func, show))
 
 function compile(func::ArrayEvaluable{T,N}; show::Bool=false, dense::Bool=true) where {T,N}
     if dense
-        CompiledDenseArrayFunction{T,N}(_compile(func, show), size(func))
+        CompiledDenseArrayFunction{T,N}(Base.invokelatest(_compile, func, show), size(func))
     else
         blocks = separate(func)
         indices = Tupl((Tupl(inds...) for (inds, _) in blocks)...)
@@ -154,6 +155,8 @@ function compile(func::ArrayEvaluable{T,N}; show::Bool=false, dense::Bool=true) 
         blockshapes = Shape[size(data) for (_, data) in blocks]
 
         iselconstant(indices) || error("Index function must be elementwise constant")
-        CompiledSparseArrayFunction{T,N}(compile(indices; show=show), compile(data; show=show), blockshapes, size(func))
+        indfunc = compile(indices; show=show)
+        datafunc = compile(data; show=show)
+        CompiledSparseArrayFunction{T,N}(indfunc, datafunc, blockshapes, size(func))
     end
 end
