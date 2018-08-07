@@ -19,10 +19,11 @@ end
 
 # insertaxis
 
-insertaxis(source::ArrayEvaluable, axes::Vector{Int}) = InsertAxis(source, axes)
+insertaxis(source::ArrayEvaluable, axes::Vector{Int}) = isempty(axes) ? source : InsertAxis(source, axes)
 
 # Ensure that Inflate commutes past InsertAxis
 function insertaxis(source::Inflate, axes::Vector{Int})
+    isempty(axes) && return source
     newdata = insertaxis(source.data, axes)
     newindices = collect(Index, source.indices)
     insertmany!(newindices, axes, :)
@@ -36,6 +37,46 @@ end
 # inv
 
 Base.inv(source::ArrayEvaluable{T,2}) where T = Inv(source)
+
+
+
+# grad
+
+function grad(self::ApplyTransform, d::Int)
+    self.dims == d || error("Inconsistent number of dimension")
+    ApplyTransformGrad(self.trans, self.arg, self.dims)
+end
+
+function grad(self::Point{N}, d::Int) where N
+    N == d || error("Inconsistent number of dimensions")
+    Constant(Matrix(1.0I, N, N))
+end
+
+function grad(self::Product, d::Int)
+    # Since the gradient dimension comes last, we need to explicitly broadcast first
+    maxndims = maximum(ndims(term) for term in self.terms)
+    vterms = [insertaxis(term, fill(ndims(term) + 1, maxndims - ndims(term))) for term in terms]
+    gterms = [grad(term, d) for term in vterms]
+
+    ret = gterms[1]
+    for (i, (vt, gt)) in enumerate(zip(vterms, gterms))
+        ret = Sum(Product(ret, vt), Product(vterms[1:i]..., gt))
+    end
+    ret
+end
+
+function grad(self::Sum, d::Int)
+    # Since the gradient dimension comes last, we need to explicitly broadcast first
+    maxndims = maximum(ndims(term) for term in self.terms)
+    terms = Tuple(grad(insertaxis(term, fill(ndims(term) + 1, maxndims - ndims(term))), d) for term in self.terms)
+    Sum(terms)
+end
+
+grad(self::Constant{T}, d::Int) where T = Zeros{T}((size(self)..., d))
+grad(self::GetIndex, d::Int) = getindex(grad(self.value, d), (self.indices..., :))
+grad(self::Inflate, d::Int) = inflate(grad(self.data, d), (self.indices..., :), (size(self)..., d))
+grad(self::InsertAxis, d::Int) = insertaxis(grad(self.source, d), self.axes)
+grad(self::Zeros{T}, d::Int) where T = Zeros{T}((size(self)..., d))
 
 
 

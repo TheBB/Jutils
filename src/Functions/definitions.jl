@@ -377,3 +377,22 @@ end
 arguments(self::Tupl) = self.terms
 prealloc(self::Tupl) = []
 codegen(self::Tupl, terms...) = :($(terms...),)
+
+
+
+# Zeros
+
+@autohasheq struct Zeros{T,N} <: ArrayEvaluable{T,N}
+    shape :: Shape
+
+    # function Zeros(shape::Shape) where T
+    #     new{T,length(shape)}()
+    # end
+end
+
+arguments(::Zeros) = ()
+Base.size(self::Zeros) = self.shape
+optimize(self::Zeros) = self
+separate(::Zeros) = []
+prealloc(self::Zeros{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+codegen(self::Zeros{T}, target) where T = :($target[:] .= zero($T); $target)

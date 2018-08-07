@@ -19,6 +19,7 @@ export Inflate, InsertAxis, Inv
 export Matmul, Monomials, Outer, Point, Product, Reshape, Sum, Tupl
 
 # Constructor exports
+export grad
 export inflate, insertaxis
 export elemindex, trans, rootcoords
 
