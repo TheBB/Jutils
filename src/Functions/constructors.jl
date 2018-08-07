@@ -33,6 +33,12 @@ end
 
 
 
+# inv
+
+Base.inv(source::ArrayEvaluable{T,2}) where T = Inv(source)
+
+
+
 # Multiplication
 
 Base.:*(left::ArrayEvaluable, right::ArrayEvaluable) = Product((left, right))

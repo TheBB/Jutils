@@ -196,6 +196,49 @@ codegen(self::InsertAxis, source) = :(reshape($source, $(size(self)...)))
 
 
 
+# Inv
+
+@autohasheq struct Inv{T,N} <: ArrayEvaluable{T,2}
+    source :: ArrayEvaluable{T,2}
+
+    function Inv(source::ArrayEvaluable{T,2}) where T
+        size(source, 1) == size(source, 2) || error("Expected square matrix")
+        new{T, size(source,1)}(source)
+    end
+end
+
+arguments(self::Inv) = (self.source,)
+Base.size(self::Inv) = size(self.source)
+optimize(self::Inv) = inv(optimize(self.source))
+prealloc(self::Inv{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+
+# Would be useful with an inv! function here
+codegen(::Inv, source, target) = :($target[:] = inv($source); $target)
+codegen(::Inv{T,1}, source, target) where T = :($target[1,1] = one($T) / $source[1,1]; $target)
+codegen(::Inv{T,2}, source, target) where T = quote
+    $target[1,1] = $source[2,2]
+    $target[2,2] = $source[1,1]
+    $target[1,2] = -$source[1,2]
+    $target[2,1] = -$source[2,1]
+    $target ./= ($source[1,1] * $source[2,2] - $source[1,2] * $source[2,1])
+    $target
+end
+codegen(::Inv{T,3}, source, target) where T = quote
+    $target[1,1] = $source[2,2] * $source[3,3] - $source[2,3] * $source[3,2]
+    $target[2,1] = $source[2,3] * $source[3,1] - $source[2,1] * $source[3,3]
+    $target[3,1] = $source[2,1] * $source[3,2] - $source[2,2] * $source[3,1]
+    $target[1,2] = $source[1,3] * $source[3,2] - $source[1,2] * $source[3,3]
+    $target[2,2] = $source[1,1] * $source[3,3] - $source[1,3] * $source[3,1]
+    $target[3,2] = $source[1,2] * $source[3,1] - $source[1,1] * $source[3,2]
+    $target[1,3] = $source[1,2] * $source[2,3] - $source[1,3] * $source[2,2]
+    $target[2,3] = $source[1,3] * $source[2,1] - $source[1,1] * $source[2,3]
+    $target[3,3] = $source[1,1] * $source[2,2] - $source[1,2] * $source[2,1]
+    $target ./= $source[1,1] * $target[1,1] + $source[1,2] * $target[2,1] + $source[1,3] * $target[3,1]
+    $target
+end
+
+
+
 # Matmul
 # TODO: Generalize using TensorOperations.jl when compatible
 

@@ -14,7 +14,9 @@ export CompiledDenseArrayFunction, CompiledFunction
 # Type exports
 export Shape, Index, Indices
 export ApplyTransform, ApplyTransformGrad
-export Constant, GetIndex, Inflate, InsertAxis, Matmul, Monomials, Outer, Point, Product, Reshape, Sum, Tupl
+export Constant, GetIndex
+export Inflate, InsertAxis, Inv
+export Matmul, Monomials, Outer, Point, Product, Reshape, Sum, Tupl
 
 # Constructor exports
 export inflate, insertaxis

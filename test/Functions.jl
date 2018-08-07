@@ -127,6 +127,27 @@ end
 end
 
 
+@testset "Inv" begin
+    Random.seed!(201808071535)
+
+    data = rand(Float64, 1, 1)
+    func = compile(inv(Constant(data)))
+    @test func([0.5], Element(Simplex{1}(), 1, ())) ≈ inv(data)
+
+    data = rand(Float64, 2, 2)
+    func = compile(inv(Constant(data)))
+    @test func([0.5], Element(Simplex{1}(), 1, ())) ≈ inv(data)
+
+    data = rand(Float64, 3, 3)
+    func = compile(inv(Constant(data)))
+    @test func([0.5], Element(Simplex{1}(), 1, ())) ≈ inv(data)
+
+    data = rand(Float64, 4, 4)
+    func = compile(inv(Constant(data)))
+    @test func([0.5], Element(Simplex{1}(), 1, ())) ≈ inv(data)
+end
+
+
 @testset "Matmul" begin
     Random.seed!(2018)
     lmx = rand(Float64, 3, 4)
