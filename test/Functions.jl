@@ -26,6 +26,13 @@ end
 end
 
 
+@testset "ApplyTransformGrad" begin
+    func = compile(ApplyTransformGrad(trans, Point{1}(), 1))
+    val = func([0.5], Element(Simplex{1}(), 1, ()))
+    @test val == fill(1.0, (1,1))
+end
+
+
 @testset "Constant" begin
     func = compile(Constant(1.0))
     val = func([0.5], Element(Simplex{1}(), 1, ()))

@@ -61,6 +61,22 @@ codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $trans))
 
 
 
+# ApplyTransformGrad
+
+@autohasheq struct ApplyTransformGrad <: ArrayEvaluable{Float64,2}
+    trans :: Evaluable{TransformChain}
+    arg :: ArrayEvaluable{Float64,1}
+    dims :: Int
+end
+
+arguments(self::ApplyTransformGrad) = (self.trans, self.arg)
+Base.size(self::ApplyTransformGrad) = (self.dims, self.dims)
+optimize(self::ApplyTransformGrad) = ApplyTransformGrad(optimize(self.trans), optimize(self.arg), dims)
+prealloc(self::ApplyTransformGrad) = []
+codegen(self::ApplyTransformGrad, trans, arg) = :(applytrans_grad($arg, $trans))
+
+
+
 # Constant
 
 @autohasheq struct Constant{T,N} <: ArrayEvaluable{T,N}

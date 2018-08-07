@@ -1,10 +1,13 @@
 module Transforms
 
 using AutoHashEquals
+using LinearAlgebra
+
+export applytrans, applytrans_grad
+export Shift
+
 
 abstract type AbstractTransform end
-
-export Shift, applytrans
 
 TransformChain = Tuple{Vararg{AbstractTransform}}
 
@@ -16,6 +19,7 @@ end
 fromdims(self::Shift) = length(self.offset)
 todims(self::Shift) = length(self.offset)
 codegen(::Type{Shift}, transform::Expr, points::Symbol) = :($points .+ $transform.offset)
+codegen_grad(::Type{Shift}, ::Expr, ::Symbol, jac::Symbol) = jac
 
 
 @generated function applytrans(points::Array{Float64}, transforms::TransformChain)
@@ -26,7 +30,21 @@ codegen(::Type{Shift}, transform::Expr, points::Symbol) = :($points .+ $transfor
         code = codegen(fieldtype(transforms, i), :(transforms[$i]), fromsym)
         ret = :($ret; $tosym = $code)
     end
-    ret
+    :($ret; return $(symbols[end]))
+end
+
+@generated function applytrans_grad(points::Array{Float64}, transforms::TransformChain)
+    ptsyms = [gensym(string(index)) for index in 1:fieldcount(transforms)+1]
+    mxsyms = [gensym(string(index)) for index in 1:fieldcount(transforms)+1]
+
+    ret = :($(ptsyms[1]) = points; $(mxsyms[1]) = Matrix(1.0I, length(points), length(points)))
+    iter = zip(1:fieldcount(transforms), ptsyms[1:end-1], ptsyms[2:end], mxsyms[1:end-1], mxsyms[2:end])
+    for (i, fromptsym, toptsym, frommxsym, tomxsym) in iter
+        mxcode = codegen_grad(fieldtype(transforms, i), :(transforms[$i]), fromptsym, frommxsym)
+        ptcode = codegen(fieldtype(transforms, i), :(transforms[$i]), fromptsym)
+        ret = :($ret; $tomxsym = $mxcode; $toptsym = $ptcode)
+    end
+    :($ret; return $(mxsyms[end]))
 end
 
 end # module
