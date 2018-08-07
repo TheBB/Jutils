@@ -14,9 +14,9 @@ version = "0.3.2"
 
 [[BinDeps]]
 deps = ["Compat", "Libdl", "SHA", "URIParser"]
-git-tree-sha1 = "160d5d926e83e0970dd549ad9fe0ac3e8107e83c"
+git-tree-sha1 = "a6e1f6b5818ef909cda3a7011dd97c3dac6dc369"
 uuid = "9e28174c-4ba2-5203-b857-d8d62c4213ee"
-version = "0.8.8"
+version = "0.8.9"
 
 [[BinaryProvider]]
 deps = ["Compat", "Pkg", "SHA"]
@@ -26,9 +26,9 @@ version = "0.3.3"
 
 [[Compat]]
 deps = ["Base64", "Dates", "DelimitedFiles", "Distributed", "InteractiveUtils", "LibGit2", "Libdl", "LinearAlgebra", "Markdown", "Mmap", "Pkg", "Printf", "REPL", "Random", "Serialization", "SharedArrays", "Sockets", "SparseArrays", "Statistics", "Test", "UUIDs", "Unicode"]
-git-tree-sha1 = "c478aec93ea90bb99c307a92df17a76131bf275f"
+git-tree-sha1 = "277d3807440d9793421354b6680911fc95d91a84"
 uuid = "34da2185-b29b-5c13-b0c7-acf172513d20"
-version = "1.0.0"
+version = "1.0.1"
 
 [[Dates]]
 deps = ["Printf"]
@@ -131,6 +131,12 @@ version = "0.6.0"
 [[Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+
+[[TensorOperations]]
+deps = ["Compat", "LinearAlgebra", "Random", "Test"]
+git-tree-sha1 = "7c23dfc805f36bf0d79a6707d7a78fe9cbcfa0a5"
+uuid = "6aa20fa7-93e2-5fca-9bc0-fbd0db3c71a2"
+version = "0.6.1"
 
 [[Test]]
 deps = ["Distributed", "InteractiveUtils", "Logging", "Random"]
