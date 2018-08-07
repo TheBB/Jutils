@@ -328,7 +328,7 @@ function codegen(self::Product, args...)
     for arg in args[2:end-1]
         code = :($code .* $arg)
     end
-    :($(args[end])[:] = $code; $(args[end]))
+    :($(args[end]) .= $code; $(args[end]))
 end
 
 
@@ -357,7 +357,7 @@ function codegen(self::Sum, args...)
     for arg in args[2:end-1]
         code = :($code .+ $arg)
     end
-    :($(args[end])[:] = $code; $(args[end]))
+    :($(args[end]) .= $code; $(args[end]))
 end
 
 
