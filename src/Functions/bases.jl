@@ -87,7 +87,7 @@ restype(self::CompiledSparseArrayFunction{T}) where T = T
 
 abstract type ArrayEvaluable{T,N} <: Evaluable{Array{T,N}} end
 
-arraytype(::ArrayEvaluable{T}) where T = T
+Base.eltype(::ArrayEvaluable{T}) where T = T
 
 asarray(v::ArrayEvaluable) = v
 asarray(v::Real) = Constant(v)

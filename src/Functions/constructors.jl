@@ -71,7 +71,7 @@ end
 function grad(self::Inv, d::Int)
     sgrad = grad(self.source, d)
     temp = Contract(self, sgrad, (1, 2), (2, 3, 4), (1, 3, 4))
-    Contract(temp, self, (1, 2, 3), (2, 4), (1, 4, 3))
+    -Contract(temp, self, (1, 2, 3), (2, 4), (1, 4, 3))
 end
 
 function grad(self::Product, d::Int)
@@ -93,11 +93,12 @@ function grad(self::Sum, d::Int)
     +((grad(expandright(term, maxndims), d) for term in self.terms)...)
 end
 
-grad(self::Constant, d::Int) = zeros(arraytype(self), size(self)..., d)
+grad(self::Constant, d::Int) = Zeros(eltype(self), size(self)..., d)
 grad(self::GetIndex, d::Int) = getindex(grad(self.value, d), (self.indices..., :))
 grad(self::Inflate, d::Int) = inflate(grad(self.data, d), (self.indices..., :), (size(self)..., d))
 grad(self::InsertAxis, d::Int) = insertaxis(grad(self.source, d), self.axes)
-grad(self::Zeros, d::Int) = zeros(arraytype(self), size(self)..., d)
+grad(self::Neg, d::Int) = -grad(self.source, d)
+grad(self::Zeros, d::Int) = Zeros(eltype(self), size(self)..., d)
 
 
 
@@ -109,10 +110,10 @@ Base.:*(left, right::ArrayEvaluable) = Product((asarray(left), right))
 Base.:*(left::Constant, right::Constant) = Constant(left.value .* right.value)
 
 function Base.:*(left::ArrayEvaluable, right::Zeros)
-    newtype = promote_type(arraytype(left), arraytype(right))
+    newtype = promote_type(eltype(left), eltype(right))
     newshape = broadcast_shape(size(left), size(right))
     newdims = length(newshape)
-    Zeros{newtype,newdims}(newshape)
+    Zeros(newtype, newshape...)
 end
 Base.:*(left::Zeros, right::ArrayEvaluable) = right * left
 
@@ -145,6 +146,12 @@ function Base.:+(left::ArrayEvaluable, right::Zeros)
 end
 Base.:+(left::Zeros, right::ArrayEvaluable) = right + left
 
+Base.:-(self::ArrayEvaluable) = Neg(self)
+Base.:-(self::Neg) = self.source
+Base.:-(left::ArrayEvaluable, right::ArrayEvaluable) = +(left, -right)
+Base.:-(left::ArrayEvaluable, right) = +(left, -right)
+Base.:-(left, right::ArrayEvaluable) = +(-left, right)
+
 
 
 # Miscellaneous
@@ -153,4 +160,3 @@ const elemindex = ArrayArgument{Int,0}(:(fill(element.index, ())), false, true, 
 const trans = Argument{TransformChain}(:(element.transform), false, true)
 
 rootcoords(ndims::Int) = ApplyTransform(trans, Point{ndims}(), ndims)
-zeros(T, shape::Int...) = Zeros{T,length(shape)}(shape)

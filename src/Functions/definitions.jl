@@ -108,7 +108,7 @@ codegen(::Constant, alloc) = alloc
         nonrep = symdiff(Set(linds), Set(rinds))
         nonrep == Set(tinds) || error("Incorrect number of indices")
 
-        newtype = promote_type(arraytype(left), arraytype(right))
+        newtype = promote_type(eltype(left), eltype(right))
         newdims = length(tinds)
         new{newtype,newdims}(left, right, linds, rinds, tinds)
     end
@@ -336,7 +336,7 @@ codegen(::Neg, source) = :(-$source)
 
     function Product(terms::Tuple{Vararg{ArrayEvaluable}})
         newshape = broadcast_shape((size(term) for term in terms)...)
-        newtype = reduce(promote_type, (arraytype(term) for term in terms))
+        newtype = reduce(promote_type, (eltype(term) for term in terms))
         new{newtype, length(newshape)}(terms)
     end
 end
@@ -366,7 +366,7 @@ end
 
     function Sum(terms::Tuple{Vararg{ArrayEvaluable}})
         newshape = broadcast_shape((size(term) for term in terms)...)
-        newtype = reduce(promote_type, (arraytype(term) for term in terms))
+        newtype = reduce(promote_type, (eltype(term) for term in terms))
         new{newtype, length(newshape)}(terms)
     end
 end
@@ -411,6 +411,7 @@ codegen(self::Tupl, terms...) = :($(terms...),)
 
 @autohasheq struct Zeros{T,N} <: ArrayEvaluable{T,N}
     shape :: Shape
+    Zeros(T, shape::Int...) = new{T,length(shape)}(shape)
 end
 
 arguments(::Zeros) = ()

@@ -159,7 +159,7 @@ end
 @testset "Neg" begin
     Random.seed!(201808081346)
     data = rand(Float64, 3, 4, 5)
-    func = compile(Neg(Constant(data)))
+    func = compile(-Constant(data))
     val = func([0.5], lineelt)
     @test val == -data
 end
@@ -189,7 +189,7 @@ end
 end
 
 @testset "Zeros" begin
-    func = compile(Zeros{Float64,3}((3,4,5)))
+    func = compile(Zeros(Float64, 3, 4, 5))
     val = func([0.5], lineelt)
     @test val == zeros(Float64, 3, 4, 5)
 end
