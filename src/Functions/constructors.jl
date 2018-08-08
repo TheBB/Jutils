@@ -74,6 +74,14 @@ function grad(self::Inv, d::Int)
     -Contract(temp, self, (1, 2, 3), (2, 4), (1, 4, 3))
 end
 
+function grad(self::Monomials, d::Int)
+    self.degree == 0 && return Zeros(eltype(self), size(self)..., d)
+    newmono = Monomials(self.points, self.degree-1, self.padding+1)
+    gradpts = insertaxis(grad(self.points, d), [1])
+    scale = Constant(Matrix(Diagonal(append!(fill(0.0, (self.padding+1,)), 1:self.degree))))
+    Contract(scale, newmono * gradpts)
+end
+
 function grad(self::Product, d::Int)
     # Since the gradient dimension comes last, we need to explicitly broadcast first
     maxndims = maximum(ndims(term) for term in self.terms)

@@ -2,7 +2,7 @@ module Functions
 
 import Base.Broadcast: broadcast_shape
 import Base.Iterators: flatten, isdone, repeated, Stateful
-import LinearAlgebra: I
+import LinearAlgebra: Diagonal, I
 import OrderedCollections: OrderedDict
 
 import TensorOperations.@tensor

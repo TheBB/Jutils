@@ -74,6 +74,16 @@ end
     ] / det^2
 end
 
+@testset "Monomials" begin
+    func = grad(Monomials(Point{2}(), 4), 2)
+    @test size(func) == (5, 2, 2)
+    val = compile(func)([0.2, 0.5], squareelt)
+    @test val[:,1,1] == (0:4) .* 0.2 .^ (-1:3)
+    @test val[:,2,1] == fill(0.0, (5,))
+    @test val[:,1,2] == fill(0.0, (5,))
+    @test val[:,2,2] == (0:4) .* 0.5 .^ (-1:3)
+end
+
 @testset "Neg" begin
     func = compile(grad(-Point{2}(), 2))
     val = func([0.0, 0.0], squareelt)
