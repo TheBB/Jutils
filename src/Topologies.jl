@@ -38,7 +38,7 @@ function basis(self::Line, ::Type{Lagrange}, degree::Int)
         for k in 0:degree
     )...)
 
-    inflate(Matmul(Constant(coeffs), poly), [dofmap], (ndofs,))
+    inflate(Contract(Constant(coeffs), poly), [dofmap], (ndofs,))
 end
 
 end # module

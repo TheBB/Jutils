@@ -13,7 +13,7 @@ macro autohasheq(typ)
 
     typename = nothing
     typeargs = []
-    fieldnames = []
+    fieldnames = Any[]
 
     # Deconstruct the type declaration to get name and type parameters
     declaration = typ.args[2]
@@ -30,6 +30,7 @@ macro autohasheq(typ)
     # Deconstruct field names
     for line in typ.args[3].args
         isa(line, LineNumberNode) && continue
+        isa(line, Symbol) && (push!(fieldnames, line); continue)
         if line.head == :(::)
             push!(fieldnames, line.args[1])
         end

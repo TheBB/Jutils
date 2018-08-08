@@ -137,6 +137,7 @@ function _compile(infunc::Evaluable, show::Bool)
     Core.eval(mod, :(import Jutils.Elements: Element))
     Core.eval(mod, :(import Jutils.Transforms: applytrans, applytrans_grad))
     Core.eval(mod, :(using LinearAlgebra))
+    Core.eval(mod, :(import TensorOperations))
     Core.eval(mod, definition)
 
     Base.invokelatest(mod.mkevaluate)

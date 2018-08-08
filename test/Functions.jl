@@ -51,6 +51,19 @@ end
 end
 
 
+@testset "Contract" begin
+    Random.seed!(2018)
+    lmx = rand(Float64, 3, 4)
+    rmx = rand(Float64, 4, 2)
+
+    pfunc = Contract(Constant(lmx), Constant(rmx))
+    @test size(pfunc) == (3, 2)
+    func = compile(pfunc)
+    val = func([0.5], Element(Simplex{1}(), 1, ()))
+    @test val ≈ lmx * rmx
+end
+
+
 @testset "GetIndex" begin
     Random.seed!(201808041834)
     array = rand(Int, 4, 5, 6)
@@ -145,16 +158,6 @@ end
     data = rand(Float64, 4, 4)
     func = compile(inv(Constant(data)))
     @test func([0.5], Element(Simplex{1}(), 1, ())) ≈ inv(data)
-end
-
-
-@testset "Matmul" begin
-    Random.seed!(2018)
-    lmx = rand(Float64, 3, 4)
-    rmx = rand(Float64, 4, 2)
-    func = compile(Matmul(Constant(lmx), Constant(rmx)))
-    val = func([0.5], Element(Simplex{1}(), 1, ()))
-    @test val ≈ lmx * rmx
 end
 
 

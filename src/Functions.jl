@@ -4,6 +4,8 @@ import OrderedCollections: OrderedDict
 import Base.Broadcast: broadcast_shape
 import Base.Iterators: flatten, isdone, repeated, Stateful
 
+import TensorOperations.@tensor
+
 import ..Transforms: TransformChain
 import ..Elements: Element
 
@@ -14,11 +16,12 @@ export CompiledDenseArrayFunction, CompiledFunction
 # Type exports
 export Shape, Index, Indices
 export ApplyTransform, ApplyTransformGrad
-export Constant, GetIndex
+export Constant, Contract, GetIndex
 export Inflate, InsertAxis, Inv
-export Matmul, Monomials, Outer, Point, Product, Reshape, Sum, Tupl
+export Monomials, Outer, Point, Product, Reshape, Sum, Tupl
 
 # Constructor exports
+export @contract
 export grad
 export inflate, insertaxis
 export elemindex, trans, rootcoords

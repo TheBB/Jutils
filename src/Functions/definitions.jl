@@ -93,6 +93,53 @@ codegen(::Constant, alloc) = alloc
 
 
 
+# Contract
+
+@autohasheq struct Contract{T,N} <: ArrayEvaluable{T,N}
+    left :: ArrayEvaluable
+    right :: ArrayEvaluable
+    linds
+    rinds
+    tinds
+
+    function Contract(left::ArrayEvaluable, right::ArrayEvaluable, linds, rinds, tinds)
+        ndims(left) == length(linds) || error("Incorrect number of indices")
+        ndims(right) == length(rinds) || error("Incorrect number of indices")
+        nonrep = symdiff(Set(linds), Set(rinds))
+        nonrep == Set(tinds) || error("Incorrect number of indices")
+
+        newtype = promote_type(arraytype(left), arraytype(right))
+        newdims = length(tinds)
+        new{newtype,newdims}(left, right, linds, rinds, tinds)
+    end
+end
+
+function Contract(left::ArrayEvaluable, right::ArrayEvaluable)
+    size(left, ndims(left)) == size(right, 1) || error("Incorrect contraction")
+    totdims = ndims(left) + ndims(right) - 2
+    leftdims = ndims(left)
+    Contract(left, right, ((1:leftdims-1)..., :a), (:a, (leftdims:totdims)...), 1:totdims)
+end
+
+function Base.size(self::Contract)
+    sizes = Dict(Iterators.flatten([zip(self.linds, size(self.left)), zip(self.rinds, size(self.right))]))
+    ((sizes[ti] for ti in self.tinds)...,)
+end
+
+arguments(self::Contract) = (self.left, self.right)
+optimize(self::Contract) = Contract(optimize(self.left), optimize(self.right), self.linds, self.rinds, self.tinds)
+prealloc(self::Contract{T}) where T = [:((Array{$T})(undef, $(size(self)...)))]
+
+function codegen(self::Contract, left, right, target)
+    cont = macroexpand(
+        Functions,
+        :(@tensor $target[($(self.tinds...))] = $left[($(self.linds...))] * $right[($(self.rinds...))])
+    )
+    :($cont; $target)
+end
+
+
+
 # GetIndex
 # TODO: More general indexing expressions?
 
@@ -235,41 +282,6 @@ codegen(::Inv{T,3}, source, target) where T = quote
     $target[3,3] = $source[1,1] * $source[2,2] - $source[1,2] * $source[2,1]
     $target ./= $source[1,1] * $target[1,1] + $source[1,2] * $target[2,1] + $source[1,3] * $target[3,1]
     $target
-end
-
-
-
-# Matmul
-# TODO: Generalize using TensorOperations.jl when compatible
-
-@autohasheq struct Matmul{T,L,R,N} <: ArrayEvaluable{T,N}
-    left :: ArrayEvaluable{L}
-    right :: ArrayEvaluable{R}
-
-    function Matmul(left::ArrayEvaluable{L}, right::ArrayEvaluable{R}) where {L <: Number, R <: Number}
-        ndims(left) > 0 || error("Expected at least a one-dimensional array")
-        ndims(right) > 0 || error("Expected at least a one-dimensional array")
-        size(left, ndims(left)) == size(right, 1) || error("Inconsistent dimensions for contraction")
-        new{promote_type(L,R), L, R, ndims(left) + ndims(right) - 2}(left, right)
-    end
-end
-
-arguments(self::Matmul) = (self.left, self.right)
-Base.size(self::Matmul) = (size(self.left)[1:end-1]..., size(self.right)[2:end]...)
-optimize(self::Matmul) = Matmul(optimize(self.left), optimize(self.right))
-prealloc(self::Matmul{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
-
-function codegen(self::Matmul{T}, left, right, result) where T
-    (i, j, k) = gensym("i"), gensym("j"), gensym("k")
-    quote
-        $result[:] .= $(zero(T))
-        for $i = CartesianIndices($(size(self.left)[1:end-1])), $j = CartesianIndices($(size(self.right)[2:end]))
-            @simd for $k = 1:$(size(self.right, 1))
-                $result[$i,$j] += $left[$i,$k] * $right[$k,$j]
-            end
-        end
-        $result
-    end
 end
 
 
