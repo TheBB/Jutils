@@ -291,26 +291,32 @@ end
 @autohasheq struct Monomials{T,N} <: ArrayEvaluable{T,N}
     points :: ArrayEvaluable{T}
     degree :: Int
+    padding :: Int
 
-    function Monomials(points::ArrayEvaluable{T,M}, degree::Int) where {T,M}
-        new{T,M+1}(points, degree)
-    end
+    Monomials(points::ArrayEvaluable{T,M}, degree::Int, padding::Int) where {T,M} = new{T,M+1}(points, degree, padding)
+    Monomials(points::ArrayEvaluable, degree::Int) = Monomials(points, degree, 0)
 end
 
 arguments(self::Monomials) = (self.points,)
-Base.size(self::Monomials) = (self.degree + 1, size(self.points)...)
+Base.size(self::Monomials) = (self.degree + self.padding + 1, size(self.points)...)
 optimize(self::Monomials) = Monomials(optimize(self.points), self.degree)
 prealloc(self::Monomials{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
-function codegen(self::Monomials, points, target)
+function codegen(self::Monomials{T}, points, target) where T
     j = gensym("j")
 
-    loopcode = Any[:($target[1,$j] = 1.0)]
-    for i in 1:self.degree
+    loopcode = Any[:($target[$(1+self.padding),$j] = 1.0)]
+    for i in self.padding .+ (1:self.degree)
         push!(loopcode, :($target[$(i+1),$j] = $target[$i,$j] * $points[$j]))
     end
 
-    Expr(:block, Expr(:for, :($j = CartesianIndices(size($points))), Expr(:block, loopcode...)), target)
+    quote
+        $target .= zero($T)
+        for $j = CartesianIndices(size($points))
+            $(loopcode...)
+        end
+        $target
+    end
 end
 
 

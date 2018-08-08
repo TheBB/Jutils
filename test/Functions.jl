@@ -148,12 +148,13 @@ end
 @testset "Monomials" begin
     Random.seed!(2018)
     pts = rand(Float64, 2, 2)
-    func = compile(Monomials(Constant(pts), 3))
+    func = compile(Monomials(Constant(pts), 3, 1))
     val = func([0.5], lineelt)
-    @test val[1,:,:] == fill(1.0, 2, 2)
-    @test val[2,:,:] ≈ pts
-    @test val[3,:,:] ≈ pts .^ 2
-    @test val[4,:,:] ≈ pts .^ 3
+    @test val[1,:,:] == fill(0.0, 2, 2)
+    @test val[2,:,:] == fill(1.0, 2, 2)
+    @test val[3,:,:] ≈ pts
+    @test val[4,:,:] ≈ pts .^ 2
+    @test val[5,:,:] ≈ pts .^ 3
 end
 
 @testset "Neg" begin
