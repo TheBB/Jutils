@@ -1,8 +1,9 @@
 module Functions
 
-import OrderedCollections: OrderedDict
 import Base.Broadcast: broadcast_shape
 import Base.Iterators: flatten, isdone, repeated, Stateful
+import LinearAlgebra: I
+import OrderedCollections: OrderedDict
 
 import TensorOperations.@tensor
 
@@ -18,7 +19,7 @@ export Shape, Index, Indices
 export ApplyTransform, ApplyTransformGrad
 export Constant, Contract, GetIndex
 export Inflate, InsertAxis, Inv
-export Monomials, Outer, Point, Product, Reshape, Sum, Tupl
+export Monomials, Neg, Outer, Point, Product, Reshape, Sum, Tupl, Zeros
 
 # Constructor exports
 export @contract

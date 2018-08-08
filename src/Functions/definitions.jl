@@ -315,6 +315,20 @@ end
 
 
 
+# Neg
+
+@autohasheq struct Neg{T,N} <: ArrayEvaluable{T,N}
+    source :: ArrayEvaluable{T,N}
+end
+
+arguments(self::Neg) = (self.source,)
+Base.size(self::Neg) = size(self.source)
+optimize(self::Neg) = Neg(optimize(self.source))
+prealloc(self::Neg) = []
+codegen(::Neg, source) = :(-$source)
+
+
+
 # Product
 
 @autohasheq struct Product{T,N} <: ArrayEvaluable{T,N}
@@ -387,6 +401,7 @@ end
 end
 
 arguments(self::Tupl) = self.terms
+optimize(self::Tupl) = Tupl((optimize(term) for term in self.terms)...)
 prealloc(self::Tupl) = []
 codegen(self::Tupl, terms...) = :($(terms...),)
 
@@ -396,10 +411,6 @@ codegen(self::Tupl, terms...) = :($(terms...),)
 
 @autohasheq struct Zeros{T,N} <: ArrayEvaluable{T,N}
     shape :: Shape
-
-    # function Zeros(shape::Shape) where T
-    #     new{T,length(shape)}()
-    # end
 end
 
 arguments(::Zeros) = ()

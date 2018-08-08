@@ -19,24 +19,33 @@ end
 
 # insertaxis
 
-insertaxis(source::ArrayEvaluable, axes::Vector{Int}) = isempty(axes) ? source : InsertAxis(source, axes)
+insertaxis(self::ArrayEvaluable, axes::Vector{Int}) = isempty(axes) ? self : InsertAxis(self, axes)
+function insertaxis(self::Constant, axes::Vector{Int})
+    isempty(axes) && return self
+    newshape = collect(Int, size(self))
+    insertmany!(newshape, axes, 1)
+    Constant(reshape(self.value, newshape...))
+end
 
 # Ensure that Inflate commutes past InsertAxis
-function insertaxis(source::Inflate, axes::Vector{Int})
-    isempty(axes) && return source
-    newdata = insertaxis(source.data, axes)
-    newindices = collect(Index, source.indices)
+function insertaxis(self::Inflate, axes::Vector{Int})
+    isempty(axes) && return self
+    newdata = insertaxis(self.data, axes)
+    newindices = collect(Index, self.indices)
     insertmany!(newindices, axes, :)
-    newshape = collect(Int, size(source))
+    newshape = collect(Int, size(self))
     insertmany!(newshape, axes, 1)
     Inflate(newdata, newindices, Tuple(newshape))
 end
+
+expandleft(self::ArrayEvaluable, tdims::Int) = insertaxis(self, fill(1, tdims - ndims(self)))
+expandright(self::ArrayEvaluable, tdims::Int) = insertaxis(self, fill(ndims(self) + 1, tdims - ndims(self)))
 
 
 
 # inv
 
-Base.inv(source::ArrayEvaluable{T,2}) where T = Inv(source)
+Base.inv(self::ArrayEvaluable{T,2}) where T = Inv(self)
 
 
 
@@ -52,15 +61,28 @@ function grad(self::Point{N}, d::Int) where N
     Constant(Matrix(1.0I, N, N))
 end
 
+function grad(self::Contract, d::Int)
+    newsym = gensym("temp")
+    lgrad = Contract(grad(self.left, d), self.right, (self.linds..., newsym), self.rinds, (self.tinds..., newsym))
+    rgrad = Contract(self.left, grad(self.right, d), self.linds, (self.rinds..., newsym), (self.tinds..., newsym))
+    Sum(lgrad, rgrad)
+end
+
+function grad(self::Inv, d::Int)
+    sgrad = grad(self.source, d)
+    temp = Contract(self, sgrad, (1, 2), (2, 3, 4), (1, 3, 4))
+    Contract(temp, self, (1, 2, 3), (2, 4), (1, 4, 3))
+end
+
 function grad(self::Product, d::Int)
     # Since the gradient dimension comes last, we need to explicitly broadcast first
     maxndims = maximum(ndims(term) for term in self.terms)
-    vterms = [insertaxis(term, fill(ndims(term) + 1, maxndims - ndims(term))) for term in terms]
+    vterms = [expandright(term, maxndims) for term in self.terms]
     gterms = [grad(term, d) for term in vterms]
 
     ret = gterms[1]
-    for (i, (vt, gt)) in enumerate(zip(vterms, gterms))
-        ret = Sum(Product(ret, vt), Product(vterms[1:i]..., gt))
+    for (i, (vt, gt)) in enumerate(zip(vterms[2:end], gterms[2:end]))
+        ret = +(ret * vt, *(vterms[1:i]..., gt))
     end
     ret
 end
@@ -68,21 +90,31 @@ end
 function grad(self::Sum, d::Int)
     # Since the gradient dimension comes last, we need to explicitly broadcast first
     maxndims = maximum(ndims(term) for term in self.terms)
-    terms = Tuple(grad(insertaxis(term, fill(ndims(term) + 1, maxndims - ndims(term))), d) for term in self.terms)
-    Sum(terms)
+    +((grad(expandright(term, maxndims), d) for term in self.terms)...)
 end
 
-grad(self::Constant{T}, d::Int) where T = Zeros{T}((size(self)..., d))
+grad(self::Constant, d::Int) = zeros(arraytype(self), size(self)..., d)
 grad(self::GetIndex, d::Int) = getindex(grad(self.value, d), (self.indices..., :))
 grad(self::Inflate, d::Int) = inflate(grad(self.data, d), (self.indices..., :), (size(self)..., d))
 grad(self::InsertAxis, d::Int) = insertaxis(grad(self.source, d), self.axes)
-grad(self::Zeros{T}, d::Int) where T = Zeros{T}((size(self)..., d))
+grad(self::Zeros, d::Int) = zeros(arraytype(self), size(self)..., d)
 
 
 
 # Multiplication
 
 Base.:*(left::ArrayEvaluable, right::ArrayEvaluable) = Product((left, right))
+Base.:*(left::ArrayEvaluable, right) = Product((left, asarray(right)))
+Base.:*(left, right::ArrayEvaluable) = Product((asarray(left), right))
+Base.:*(left::Constant, right::Constant) = Constant(left.value .* right.value)
+
+function Base.:*(left::ArrayEvaluable, right::Zeros)
+    newtype = promote_type(arraytype(left), arraytype(right))
+    newshape = broadcast_shape(size(left), size(right))
+    newdims = length(newshape)
+    Zeros{newtype,newdims}(newshape)
+end
+Base.:*(left::Zeros, right::ArrayEvaluable) = right * left
 
 # Ensure that Inflate commutes past Product
 function Base.:*(left::Inflate, right::Inflate)
@@ -99,9 +131,26 @@ end
 
 
 
+# Summation
+
+Base.:+(left::ArrayEvaluable, right::ArrayEvaluable) = Sum((left, right))
+Base.:+(left::ArrayEvaluable, right) = Sum((left, asarray(right)))
+Base.:+(left, right::ArrayEvaluable) = Sum((asarray(left), right))
+Base.:+(left::Constant, right::Constant) = Constant(left.value .+ right.value)
+
+# TODO: Apply broadcasting during optimization phase?
+function Base.:+(left::ArrayEvaluable, right::Zeros)
+    any(s != 1 for s in size(right)[ndims(left)+1:end]) && return Sum((left, right))
+    expandright(left, ndims(right))
+end
+Base.:+(left::Zeros, right::ArrayEvaluable) = right + left
+
+
+
 # Miscellaneous
 
 const elemindex = ArrayArgument{Int,0}(:(fill(element.index, ())), false, true, ())
 const trans = Argument{TransformChain}(:(element.transform), false, true)
 
 rootcoords(ndims::Int) = ApplyTransform(trans, Point{ndims}(), ndims)
+zeros(T, shape::Int...) = Zeros{T,length(shape)}(shape)

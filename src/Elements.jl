@@ -3,7 +3,7 @@ module Elements
 using FastGaussQuadrature
 import ..Transforms: TransformChain
 
-export Simplex, Element, quadrule
+export Simplex, Element, Tensor, quadrule
 
 
 abstract type ReferenceElement end
