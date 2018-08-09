@@ -20,4 +20,6 @@ const squareelt = Element(Tensor([Simplex{1}(), Simplex{1}()]), 1, ())
 @testset "Functions" begin include("Functions.jl") end
 @testset "Gradients" begin include("Gradients.jl") end
 
+@testset "Optimization" begin include("Optimization.jl") end
+
 @testset "Integration" begin include("Integration.jl") end

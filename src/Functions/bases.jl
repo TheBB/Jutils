@@ -8,8 +8,9 @@ isconstant(::Any) = true
 isconstant(self::Evaluable) = all(isconstant(arg) for arg in arguments(self))
 iselconstant(::Any) = true
 iselconstant(self::Evaluable) = all(iselconstant(arg) for arg in arguments(self))
-restype(self::Evaluable{T}) where T = T
 optimize(x::Any) = x
+restype(self::Evaluable{T}) where T = T
+typetree(self::Evaluable) = [typeof(self).name.name, (typetree(arg) for arg in arguments(self))...]
 
 ast(self::Evaluable) = ast!(self, Set{Evaluable}(), dependencies(self))
 
