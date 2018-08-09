@@ -36,7 +36,7 @@ end
     func = compile(optimize(pfunc); dense=false)
     mass = integrate(func, domain, 1)
     @test isa(mass, SparseMatrixCSC)
-    # @test nnz(mass) == 16
+    @test nnz(mass) == 16
     @test mass ≈ sparse(
         [1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6],
         [1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6],

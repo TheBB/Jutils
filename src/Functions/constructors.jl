@@ -1,9 +1,41 @@
 
 # getindex
 
-function Base.getindex(value::ArrayEvaluable{T,N}, indices...) where {T,N}
+function Base.getindex(self::ArrayEvaluable, indices...)
     cleaned_indices = Index[isa(ix, Colon) ? ix : asarray(ix) for ix in indices]
-    GetIndex(value, cleaned_indices)
+    GetIndex(self, cleaned_indices)
+end
+
+# Ensure that Inflate commutes past GetIndex
+function Base.getindex(self::Inflate, indices...)
+    indices = Index[isa(ix, Colon) ? ix : asarray(ix) for ix in indices]
+
+    @assert all(isa(x, Colon) || isa(y, Colon) for (x, y) in zip(self.indices, indices))
+    @assert index_dimcheck(indices, 0, 1)
+
+    new_iix, new_gix, new_shape = Vector{Index}(), Vector{Index}(), Vector{Int}()
+    for (gix, iix, shp) in zip(indices, self.indices, size(self))
+        if isa(gix, Colon) && isa(iix, Colon)
+            push!(new_iix, :)
+            push!(new_gix, :)
+            push!(new_shape, shp)
+        elseif isa(gix, Colon) && ndims(iix) == 1
+            push!(new_iix, iix)
+            push!(new_gix, :)
+            push!(new_shape, shp)
+        elseif ndims(gix) == 0 && isa(iix, Colon)
+            push!(new_gix, gix)
+        elseif ndims(gix) == 1 && isa(iix, Colon)
+            push!(new_iix, :)
+            push!(new_gix, gix)
+            push!(new_shape, size(gix, 1))
+        else
+            @assert false
+        end
+    end
+
+    new_data = all(isa(gix, Colon) for gix in new_gix) ? self.data : getindex(self.data, new_gix...)
+    inflate(new_data, new_iix, Tuple(new_shape))
 end
 
 
