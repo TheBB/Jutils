@@ -299,7 +299,7 @@ end
 
 arguments(self::Monomials) = (self.points,)
 Base.size(self::Monomials) = (self.degree + self.padding + 1, size(self.points)...)
-optimize(self::Monomials) = Monomials(optimize(self.points), self.degree)
+optimize(self::Monomials) = Monomials(optimize(self.points), self.degree, self.padding)
 prealloc(self::Monomials{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Monomials{T}, points, target) where T
