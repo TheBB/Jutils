@@ -1,5 +1,5 @@
 
-# getindex
+# GetIndex
 
 function Base.getindex(self::ArrayEvaluable, indices...)
     cleaned_indices = Index[isa(ix, Colon) ? ix : asarray(ix) for ix in indices]
@@ -44,24 +44,24 @@ function Base.getindex(self::Inflate, indices...)
     end
 
     new_data = all(isa(gix, Colon) for gix in new_gix) ? self.data : getindex(self.data, new_gix...)
-    inflate(new_data, new_iix, Tuple(new_shape))
+    Inflate(new_data, Tuple(new_shape), new_iix)
 end
 
 
 
-# inflate
+# Inflate
 
-function inflate(source::ArrayEvaluable, indices, shape::Shape)
-    cleaned_indices = Index[isa(ix, Colon) ? ix : asarray(ix) for ix in indices]
-    Inflate(source, cleaned_indices, shape)
-end
+Inflate(source::ArrayEvaluable, shape::Shape, indices::Vector{Index}) = Inflate(source, shape, Tuple(indices))
+Inflate(source::ArrayEvaluable, shape::Shape, indices...) = Inflate(source, shape, indices)
 
 
 
-# insertaxis
+# InsertAxis
 
-insertaxis(self::ArrayEvaluable, axes::Vector{Int}) = isempty(axes) ? self : InsertAxis(self, axes)
-function insertaxis(self::Constant, axes::Vector{Int})
+InsertAxis(self::ArrayEvaluable, axes::Tuple{Vararg{Int}}) = InsertAxis(self, collect(Int, axes))
+InsertAxis(self::ArrayEvaluable, axes::Int...) = InsertAxis(self, collect(Int, axes))
+
+function InsertAxis(self::Constant, axes::Vector{Int})
     isempty(axes) && return self
     newshape = collect(Int, size(self))
     insertmany!(newshape, axes, 1)
@@ -69,28 +69,28 @@ function insertaxis(self::Constant, axes::Vector{Int})
 end
 
 # Ensure that Inflate commutes past InsertAxis
-function insertaxis(self::Inflate, axes::Vector{Int})
+function InsertAxis(self::Inflate, axes::Vector{Int})
     isempty(axes) && return self
-    newdata = insertaxis(self.data, axes)
+    newdata = InsertAxis(self.data, axes)
     newindices = collect(Index, self.indices)
     insertmany!(newindices, axes, :)
     newshape = collect(Int, size(self))
     insertmany!(newshape, axes, 1)
-    Inflate(newdata, newindices, Tuple(newshape))
+    Inflate(newdata, Tuple(newshape), newindices)
 end
 
-expandleft(self::ArrayEvaluable, tdims::Int) = insertaxis(self, fill(1, tdims - ndims(self)))
-expandright(self::ArrayEvaluable, tdims::Int) = insertaxis(self, fill(ndims(self) + 1, tdims - ndims(self)))
+expandleft(self::ArrayEvaluable, tdims::Int) = InsertAxis(self, fill(1, tdims - ndims(self)))
+expandright(self::ArrayEvaluable, tdims::Int) = InsertAxis(self, fill(ndims(self) + 1, tdims - ndims(self)))
 
 
 
-# inv
+# Inv
 
 Base.inv(self::ArrayEvaluable{T,2}) where T = Inv(self)
 
 
 
-# grad
+# Derivatives
 
 function grad(self::ApplyTransform, d::Int)
     self.dims == d || error("Inconsistent number of dimension")
@@ -118,9 +118,9 @@ end
 function grad(self::Monomials, d::Int)
     self.degree == 0 && return Zeros(eltype(self), size(self)..., d)
     newmono = Monomials(self.points, self.degree-1, self.padding+1)
-    gradpts = insertaxis(grad(self.points, d), [1])
+    gradpts = InsertAxis(grad(self.points, d), 1)
     scale = Constant(Matrix(Diagonal(append!(fill(0.0, (self.padding+1,)), 1:self.degree))))
-    Contract(scale, newmono * gradpts)
+    Contract(scale, newmono .* gradpts)
 end
 
 function grad(self::Product, d::Int)
@@ -131,7 +131,7 @@ function grad(self::Product, d::Int)
 
     ret = gterms[1]
     for (i, (vt, gt)) in enumerate(zip(vterms[2:end], gterms[2:end]))
-        ret = +(ret * vt, *(vterms[1:i]..., gt))
+        ret = .+(ret .* vt, .*(vterms[1:i]..., gt))
     end
     ret
 end
@@ -139,13 +139,13 @@ end
 function grad(self::Sum, d::Int)
     # Since the gradient dimension comes last, we need to explicitly broadcast first
     maxndims = maximum(ndims(term) for term in self.terms)
-    +((grad(expandright(term, maxndims), d) for term in self.terms)...)
+    .+((grad(expandright(term, maxndims), d) for term in self.terms)...)
 end
 
 grad(self::Constant, d::Int) = Zeros(eltype(self), size(self)..., d)
 grad(self::GetIndex, d::Int) = getindex(grad(self.value, d), self.indices..., :)
-grad(self::Inflate, d::Int) = inflate(grad(self.data, d), (self.indices..., :), (size(self)..., d))
-grad(self::InsertAxis, d::Int) = insertaxis(grad(self.source, d), self.axes)
+grad(self::Inflate, d::Int) = Inflate(grad(self.data, d), (size(self)..., d), (self.indices..., :))
+grad(self::InsertAxis, d::Int) = InsertAxis(grad(self.source, d), self.axes)
 grad(self::Neg, d::Int) = -grad(self.source, d)
 grad(self::Zeros, d::Int) = Zeros(eltype(self), size(self)..., d)
 
@@ -153,53 +153,56 @@ grad(self::Zeros, d::Int) = Zeros(eltype(self), size(self)..., d)
 
 # Multiplication
 
-Base.:*(left::ArrayEvaluable, right::ArrayEvaluable) = Product((left, right))
-Base.:*(left::ArrayEvaluable, right) = Product((left, asarray(right)))
-Base.:*(left, right::ArrayEvaluable) = Product((asarray(left), right))
-Base.:*(left::Constant, right::Constant) = Constant(left.value .* right.value)
+Product(left::ArrayEvaluable, right::ArrayEvaluable) = Product((left, right))
+Product(left::Constant, right::Constant) = Constant(left.value .* right.value)
 
-function Base.:*(left::ArrayEvaluable, right::Zeros)
+function Product(left::ArrayEvaluable, right::Zeros)
     newtype = promote_type(eltype(left), eltype(right))
     newshape = broadcast_shape(size(left), size(right))
     newdims = length(newshape)
     Zeros(newtype, newshape...)
 end
-Base.:*(left::Zeros, right::ArrayEvaluable) = right * left
+Product(left::Zeros, right::ArrayEvaluable) = Product(right, left)
 
 # Ensure that Inflate commutes past Product
-function Base.:*(left::Inflate, right::Inflate)
+function Product(left::Inflate, right::Inflate)
     any(!isa(l, Colon) && !isa(r, Colon) for (l,r) in zip(left.indices, right.indices)) &&
         error("Joining inflations with overlapping axes not supported")
     ndims(left) == ndims(right) ||
         error("Joining inflations with different number of dimensions not supported")
 
-    newdata = left.data * right.data
+    newdata = left.data .* right.data
     newindices = Index[isa(l, Colon) ? r : l for (l,r) in zip(left.indices, right.indices)]
     newshape = broadcast_shape(size(left), size(right))
-    inflate(newdata, newindices, newshape)
+    Inflate(newdata, newshape, newindices)
 end
+
+Broadcast.broadcasted(::typeof(*), left::ArrayEvaluable, right::ArrayEvaluable) = Product(left, right)
+Broadcast.broadcasted(::typeof(*), left::ArrayEvaluable, right) = Product(left, asarray(right))
+Broadcast.broadcasted(::typeof(*), left, right::ArrayEvaluable) = Product(asarray(left), right)
 
 
 
-# Summation
+# Summation and negation
 
-Base.:+(left::ArrayEvaluable, right::ArrayEvaluable) = Sum((left, right))
-Base.:+(left::ArrayEvaluable, right) = Sum((left, asarray(right)))
-Base.:+(left, right::ArrayEvaluable) = Sum((asarray(left), right))
-Base.:+(left::Constant, right::Constant) = Constant(left.value .+ right.value)
+Sum(left::ArrayEvaluable, right::ArrayEvaluable) = Sum((left, right))
+Sum(left::Constant, right::Constant) = Constant(left.value .+ right.value)
 
 # TODO: Apply broadcasting during optimization phase?
-function Base.:+(left::ArrayEvaluable, right::Zeros)
+function Sum(left::ArrayEvaluable, right::Zeros)
     any(s != 1 for s in size(right)[ndims(left)+1:end]) && return Sum((left, right))
     expandright(left, ndims(right))
 end
-Base.:+(left::Zeros, right::ArrayEvaluable) = right + left
+Sum(left::Zeros, right::ArrayEvaluable) = Sum(right, left)
+
+Broadcast.broadcasted(::typeof(+), left::ArrayEvaluable, right::ArrayEvaluable) = Sum(left, right)
+Broadcast.broadcasted(::typeof(+), left::ArrayEvaluable, right) = Sum(left, asarray(right))
+Broadcast.broadcasted(::typeof(+), left, right::ArrayEvaluable) = Sum(asarray(left), right)
+
+Neg(self::Neg) = self.source
 
 Base.:-(self::ArrayEvaluable) = Neg(self)
-Base.:-(self::Neg) = self.source
-Base.:-(left::ArrayEvaluable, right::ArrayEvaluable) = +(left, -right)
-Base.:-(left::ArrayEvaluable, right) = +(left, -right)
-Base.:-(left, right::ArrayEvaluable) = +(-left, right)
+Broadcast.broadcasted(::typeof(-), self::ArrayEvaluable) = Neg(self)
 
 
 
@@ -208,6 +211,6 @@ Base.:-(left, right::ArrayEvaluable) = +(-left, right)
 const elemindex = ArrayArgument{Int,0}(:(fill(element.index, ())), false, true, ())
 const trans = Argument{TransformChain}(:(element.transform), false, true)
 
-outer(left::ArrayEvaluable, right::ArrayEvaluable) = insertaxis(left, [1]) * insertaxis(right, [2])
+outer(left::ArrayEvaluable, right::ArrayEvaluable) = InsertAxis(left, 1) .* InsertAxis(right, 2)
 outer(self::ArrayEvaluable) = outer(self, self)
 rootcoords(ndims::Int) = ApplyTransform(trans, Point{ndims}(), ndims)

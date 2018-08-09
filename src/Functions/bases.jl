@@ -97,8 +97,6 @@ asarray(v::AbstractArray) = Constant(v)
 Base.ndims(self::ArrayEvaluable{T,N}) where {T,N} = N :: Int
 Base.size(self::ArrayEvaluable, dim::Int) = size(self)[dim]
 Base.show(io::IO, self::ArrayEvaluable) = print(io, string(typeof(self).name.name), size(self))
-Base.:+(self::ArrayEvaluable, rest...) = Sum(self, (asarray(v) for v in rest)...)
-Base.:*(self::ArrayEvaluable, rest...) = Product(self, (asarray(v) for v in rest)...)
 
 separate(self::ArrayEvaluable) = [(Tuple(Constant(collect(1:n)) for n in size(self)), self)]
 

@@ -191,17 +191,18 @@ end
     indices :: Indices
     shape :: Shape
 
-    function Inflate(data::ArrayEvaluable{T}, indices::Indices, shape::Shape) where T
+    function Inflate(data::ArrayEvaluable, shape::Shape, indices::Tuple)
+        indices = Index[isa(ix, Colon) ? ix : asarray(ix) for ix in indices]
         length(indices) == length(shape) || error("Inconsistent indexing")
         index_resultsize(shape, indices) == size(data) || error("Inconsistent dimensions")
         index_dimcheck(indices, 1, 1) || error("Multidimensional indices not supported for inflate")
-        new{T,length(shape)}(data, indices, shape)
+        new{eltype(data), length(shape)}(data, indices, shape)
     end
 end
 
 arguments(self::Inflate) = (self.data, (i for i in self.indices if isa(i, Evaluable))...)
 Base.size(self::Inflate) = self.shape
-optimize(self::Inflate) = Inflate(optimize(self.data), Index[optimize(i) for i in self.indices], self.shape)
+optimize(self::Inflate) = Inflate(optimize(self.data), self.shape, Index[optimize(i) for i in self.indices])
 separate(self::Inflate) = [
     ((((isa(ix, Colon) ? ind : getindex(ix, ind)) for (ix, ind) in zip(self.indices, inds))...,), data)
     for (inds, data) in separate(self.data)
@@ -226,9 +227,10 @@ end
     source :: ArrayEvaluable{T}
     axes :: Vector{Int}
 
-    function InsertAxis(source::ArrayEvaluable{T}, axes::Vector{Int}) where T
+    function InsertAxis(source::ArrayEvaluable, axes::Vector{Int})
+        isempty(axes) && return source
         all(1 <= i <= ndims(source) + 1 for i in axes) || error("Axes out of range")
-        new{T, ndims(source)+length(axes)}(source, sort(axes))
+        new{eltype(source), ndims(source)+length(axes)}(source, sort(axes))
     end
 end
 
@@ -238,7 +240,7 @@ function Base.size(self::InsertAxis)
     insertmany!(shape, self.axes, 1)
     Tuple(shape)
 end
-optimize(self::InsertAxis) = insertaxis(optimize(self.source), self.axes)
+optimize(self::InsertAxis) = InsertAxis(optimize(self.source), self.axes)
 prealloc(self::InsertAxis) = []
 codegen(self::InsertAxis, source) = :(reshape($source, $(size(self)...)))
 
@@ -348,11 +350,9 @@ codegen(::Neg, source) = :(-$source)
     end
 end
 
-Product(terms...) = Product(terms)
-
 arguments(self::Product) = self.terms
 Base.size(self::Product) = broadcast_shape((size(term) for term in self.terms)...)
-optimize(self::Product) = *(Tuple(optimize(term) for term in self.terms)...)
+optimize(self::Product) = .*((optimize(term) for term in self.terms)...)
 prealloc(self::Product{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 # Note: element-wise product!

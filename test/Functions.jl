@@ -1,3 +1,7 @@
+# The test sets in this file are mostly intended to test the "raw" form of function objects.
+# Therefore we use directly the inner constructors and avoid the more convenient outer
+# constructors which may potentially optimize out some of the complexity.
+
 @testset "Argument" begin
     func = compile(trans)
     val = func([0.5], Element(Simplex{1}(), 1, ()))
@@ -36,7 +40,7 @@ end
     val = func([0.2], lineelt)
     @test val == [1.0, 2.0, 3.0]
 
-    func = Sum(Constant([0.0]), Constant([0.0]))
+    func = Sum((Constant([0.0]), Constant([0.0])))
     @test length(Functions.dependencies(func)) == 2
 end
 
@@ -78,11 +82,11 @@ end
 
     data = Constant([1.0, 2.0, 3.0, 4.0])
     index1 = Constant([1, 2, 3, 4])
-    func = compile(inflate(data, [index1], (4,)))
+    func = compile(Inflate(data, (4,), index1))
     val = func([0.1], lineelt)
     @test val == [1.0, 2.0, 3.0, 4.0]
 
-    func = compile(inflate(data, [index1], (7,)))
+    func = compile(Inflate(data, (7,), index1))
     val = func([0.1], lineelt)
     @test val == [1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0]
 end
@@ -161,7 +165,7 @@ end
     Random.seed!(2018)
     lmx = rand(Float64, 5)
     rmx = rand(Float64, 5, 9)
-    func = compile(Product(Constant(lmx), Constant(rmx)))
+    func = compile(Product((Constant(lmx), Constant(rmx))))
     val = func([0.5], lineelt)
     @test val ≈ lmx .* rmx
 end
