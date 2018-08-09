@@ -102,7 +102,7 @@ function grad(self::Sum, d::Int)
 end
 
 grad(self::Constant, d::Int) = Zeros(eltype(self), size(self)..., d)
-grad(self::GetIndex, d::Int) = getindex(grad(self.value, d), (self.indices..., :))
+grad(self::GetIndex, d::Int) = getindex(grad(self.value, d), self.indices..., :)
 grad(self::Inflate, d::Int) = inflate(grad(self.data, d), (self.indices..., :), (size(self)..., d))
 grad(self::InsertAxis, d::Int) = insertaxis(grad(self.source, d), self.axes)
 grad(self::Neg, d::Int) = -grad(self.source, d)
