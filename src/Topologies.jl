@@ -7,7 +7,7 @@ using ..Transforms
 using ..Elements
 using ..Functions
 
-export Line, Lagrange, basis, refelems
+export Line, Lagrange, mkbasis, refelems
 
 abstract type Topology{N} <: AbstractArray{Element,N} end
 struct Lagrange end
@@ -27,7 +27,7 @@ end
 
 refelems(::Line) = (Simplex{1}(),)
 
-function basis(self::Line, ::Type{Lagrange}, degree::Int)
+function mkbasis(self::Line, ::Type{Lagrange}, degree::Int)
     dofs = 1 .+ cat((range(elemid*degree, length=degree+1) for elemid in range(0, length=self.nelems))..., dims=2)
     ndofs = self.nelems * degree + 1
     dofmap = getindex(Constant(dofs), :, elemindex)
