@@ -71,14 +71,6 @@ end
     val = func([0.1], lineelt)
     @test size(val) == (5,)
     @test val == array[1, :, 4]
-
-    # Indexing with multidimensional indices
-    pfunc = getindex(Constant(array), [1 2; 3 4], :, :)
-    @test size(pfunc) == (2, 2, 5, 6)
-    func = compile(pfunc)
-    val = func([0.1], lineelt)
-    @test size(val) == (2, 2, 5, 6)
-    @test val == array[[1 2; 3 4], :, :]
 end
 
 @testset "Inflate" begin

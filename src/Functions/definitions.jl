@@ -149,6 +149,7 @@ end
 
     function GetIndex(value::ArrayEvaluable{T,N}, indices::Indices) where {T,N}
         length(indices) == ndims(value) || error("Inconsistent indexing")
+        index_dimcheck(indices, 0, 1) || error("Multidimensional indices not supported for getindex")
 
         # Attempt type inference. TODO: Make this more robust
         indextypes = [isa(i, Evaluable) ? restype(i) : typeof(i) for i in indices]
