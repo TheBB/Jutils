@@ -23,9 +23,9 @@ export Monomials, Neg, Outer, Point, Product, Reshape, Sum, Tupl, Zeros
 
 # Constructor exports
 export @contract
-export grad
-export inflate, insertaxis
+export grad, inflate, insertaxis
 export elemindex, trans, rootcoords
+export outer
 
 
 # Some typedefs

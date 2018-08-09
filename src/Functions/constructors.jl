@@ -167,4 +167,6 @@ Base.:-(left, right::ArrayEvaluable) = +(-left, right)
 const elemindex = ArrayArgument{Int,0}(:(fill(element.index, ())), false, true, ())
 const trans = Argument{TransformChain}(:(element.transform), false, true)
 
+outer(left::ArrayEvaluable, right::ArrayEvaluable) = insertaxis(left, [1]) * insertaxis(right, [2])
+outer(self::ArrayEvaluable) = outer(self, self)
 rootcoords(ndims::Int) = ApplyTransform(trans, Point{ndims}(), ndims)
