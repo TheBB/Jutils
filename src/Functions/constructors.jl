@@ -6,6 +6,15 @@ function Base.getindex(self::ArrayEvaluable, indices...)
     GetIndex(self, cleaned_indices)
 end
 
+function Base.getindex(self::Constant, indices...)
+    cleaned_indices = Index[isa(ix, Colon) ? ix : asarray(ix) for ix in indices]
+    if all(isa(ix, Colon) || isa(ix, Constant) for ix in cleaned_indices)
+        Constant(self.value[(isa(i, Colon) ? i : i.value for i in cleaned_indices)...])
+    else
+        GetIndex(self, cleaned_indices)
+    end
+end
+
 # Ensure that Inflate commutes past GetIndex
 function Base.getindex(self::Inflate, indices...)
     indices = Index[isa(ix, Colon) ? ix : asarray(ix) for ix in indices]
