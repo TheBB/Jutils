@@ -1,4 +1,28 @@
 
+# Contraction
+
+function Contract(left::ArrayEvaluable, right::ArrayEvaluable, laxis::Int, raxis::Int)
+    (nl, nr) = ndims(left), ndims(right)
+    tinds = collect(Any, 1:nl+nr-2)
+    linds = collect(Any, 1:nl-1)
+    rinds = collect(Any, nl:nl+nr-2)
+    insert!(linds, laxis, :a)
+    insert!(rinds, raxis, :a)
+    Contract(left, right, linds, rinds, tinds)
+end
+
+function Contract(left::ArrayEvaluable, right::ArrayEvaluable, laxis::Symbol, raxis::Symbol)
+    Contract(left, right, laxis == :first ? 1 : ndims(left), raxis == :first ? 1 : ndims(right))
+end
+
+Contract(left::ArrayEvaluable, right::ArrayEvaluable) = Contract(left, right, :last, :first)
+
+Base.:*(left::ArrayEvaluable, right::ArrayEvaluable) = Contract(left, right)
+Base.:*(left::ArrayEvaluable, right) = Contract(left, asarray(right))
+Base.:*(left, right::ArrayEvaluable) = Contract(asarray(left), right)
+
+
+
 # GetIndex
 
 function Base.getindex(self::ArrayEvaluable, indices...)
@@ -104,15 +128,15 @@ end
 
 function grad(self::Contract, d::Int)
     newsym = gensym("temp")
-    lgrad = Contract(grad(self.left, d), self.right, (self.linds..., newsym), self.rinds, (self.tinds..., newsym))
-    rgrad = Contract(self.left, grad(self.right, d), self.linds, (self.rinds..., newsym), (self.tinds..., newsym))
+    lgrad = Contract(grad(self.left, d), self.right, [self.linds..., newsym], self.rinds, [self.tinds..., newsym])
+    rgrad = Contract(self.left, grad(self.right, d), self.linds, [self.rinds..., newsym], [self.tinds..., newsym])
     Sum(lgrad, rgrad)
 end
 
 function grad(self::Inv, d::Int)
     sgrad = grad(self.source, d)
-    temp = Contract(self, sgrad, (1, 2), (2, 3, 4), (1, 3, 4))
-    -Contract(temp, self, (1, 2, 3), (2, 4), (1, 4, 3))
+    temp = self * sgrad
+    -Contract(self * sgrad, self, [1, 2, 3], [2, 4], [1, 4, 3])
 end
 
 function grad(self::Monomials, d::Int)
@@ -120,7 +144,7 @@ function grad(self::Monomials, d::Int)
     newmono = Monomials(self.points, self.degree-1, self.padding+1)
     gradpts = InsertAxis(grad(self.points, d), 1)
     scale = Constant(Matrix(Diagonal(append!(fill(0.0, (self.padding+1,)), 1:self.degree))))
-    Contract(scale, newmono .* gradpts)
+    scale * (newmono .* gradpts)
 end
 
 function grad(self::Product, d::Int)

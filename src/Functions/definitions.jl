@@ -98,11 +98,11 @@ codegen(::Constant, alloc) = alloc
 @autohasheq struct Contract{T,N} <: ArrayEvaluable{T,N}
     left :: ArrayEvaluable
     right :: ArrayEvaluable
-    linds
-    rinds
-    tinds
+    linds :: Vector
+    rinds :: Vector
+    tinds :: Vector
 
-    function Contract(left::ArrayEvaluable, right::ArrayEvaluable, linds, rinds, tinds)
+    function Contract(left::ArrayEvaluable, right::ArrayEvaluable, linds::Vector, rinds::Vector, tinds::Vector)
         ndims(left) == length(linds) || error("Incorrect number of indices")
         ndims(right) == length(rinds) || error("Incorrect number of indices")
         nonrep = symdiff(Set(linds), Set(rinds))
@@ -112,13 +112,6 @@ codegen(::Constant, alloc) = alloc
         newdims = length(tinds)
         new{newtype,newdims}(left, right, linds, rinds, tinds)
     end
-end
-
-function Contract(left::ArrayEvaluable, right::ArrayEvaluable)
-    size(left, ndims(left)) == size(right, 1) || error("Incorrect contraction")
-    totdims = ndims(left) + ndims(right) - 2
-    leftdims = ndims(left)
-    Contract(left, right, ((1:leftdims-1)..., :a), (:a, (leftdims:totdims)...), 1:totdims)
 end
 
 function Base.size(self::Contract)
