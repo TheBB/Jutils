@@ -29,10 +29,10 @@
     )
 end
 
-@testset "1D-Lagrange-Lapl" begin
+@testset "1D-Lagrange-Lapl-Ref" begin
     domain, _ = line(5)
-    pfunc = outer(grad(mkbasis(domain, Lagrange, 1), 1)[:,1])
 
+    pfunc = outer(grad(mkbasis(domain, Lagrange, 1), 1)[:,1])
     func = compile(optimize(pfunc); dense=false)
     mass = integrate(func, domain, 1)
     @test isa(mass, SparseMatrixCSC)
@@ -42,4 +42,35 @@ end
         [1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 5, 4, 5, 6, 5, 6],
         [1, -1, -1, 2, -1, -1, 2, -1, -1, 2, -1, -1, 2, -1, -1, 1],
     )
+end
+
+@testset "1D-Lagrange-Lapl" begin
+    domain, geom = line(5)
+
+    pfunc = outer(grad(mkbasis(domain, Lagrange, 1), geom)[:,1])
+    func = compile(optimize(pfunc))
+    mass = integrate(func, domain, 1)
+    @test mass ≈ diagm(
+        -1 => fill(-1, (5,)),
+        0 => vcat([1], fill(2, (4,)), [1]),
+        1 => fill(-1, (5,)),
+    )
+
+    pfunc = outer(grad(mkbasis(domain, Lagrange, 1), 2 .* geom)[:,1])
+    func = compile(optimize(pfunc))
+    mass = integrate(func, domain, 1)
+    @test mass ≈ diagm(
+        -1 => fill(-1, (5,)),
+        0 => vcat([1], fill(2, (4,)), [1]),
+        1 => fill(-1, (5,)),
+    ) / 4
+
+    pfunc = outer(grad(mkbasis(domain, Lagrange, 1), 0.5 .* geom)[:,1])
+    func = compile(optimize(pfunc))
+    mass = integrate(func, domain, 1)
+    @test mass ≈ diagm(
+        -1 => fill(-1, (5,)),
+        0 => vcat([1], fill(2, (4,)), [1]),
+        1 => fill(-1, (5,)),
+    ) * 4
 end

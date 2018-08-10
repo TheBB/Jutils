@@ -71,7 +71,7 @@ end
 
 arguments(self::ApplyTransformGrad) = (self.trans, self.arg)
 Base.size(self::ApplyTransformGrad) = (self.dims, self.dims)
-optimize(self::ApplyTransformGrad) = ApplyTransformGrad(optimize(self.trans), optimize(self.arg), dims)
+optimize(self::ApplyTransformGrad) = ApplyTransformGrad(optimize(self.trans), optimize(self.arg), self.dims)
 prealloc(self::ApplyTransformGrad) = []
 codegen(self::ApplyTransformGrad, trans, arg) = :(applytrans_grad($arg, $trans))
 

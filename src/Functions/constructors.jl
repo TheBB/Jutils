@@ -17,6 +17,18 @@ end
 
 Contract(left::ArrayEvaluable, right::ArrayEvaluable) = Contract(left, right, :last, :first)
 
+function Contract(left::ArrayEvaluable, right::ArrayEvaluable, onto::Int; fromright::Bool=false)
+    @assert ndims(left) == 2
+    tinds = collect(Any, 1:ndims(right))
+    rinds = collect(Any, 1:ndims(right))
+    rinds[onto] = :a
+    linds = fromright ? [:a, onto] : [onto, :a]
+    Contract(left, right, linds, rinds, tinds)
+end
+
+Contract(left::ArrayEvaluable, right::ArrayEvaluable, onto::Symbol; fromright::Bool=false) =
+    Contract(left, right, onto == :first ? 1 : ndims(right); fromright=fromright)
+
 Base.:*(left::ArrayEvaluable, right::ArrayEvaluable) = Contract(left, right)
 Base.:*(left::ArrayEvaluable, right) = Contract(left, asarray(right))
 Base.:*(left, right::ArrayEvaluable) = Contract(asarray(left), right)
@@ -116,6 +128,12 @@ Base.inv(self::ArrayEvaluable{T,2}) where T = Inv(self)
 
 # Derivatives
 
+function grad(self::ArrayEvaluable, geom::ArrayEvaluable)
+    @assert ndims(geom) == 1
+    dims = size(geom, 1)
+    grad(self, dims) * inv(grad(geom, dims))
+end
+
 function grad(self::ApplyTransform, d::Int)
     self.dims == d || error("Inconsistent number of dimension")
     ApplyTransformGrad(self.trans, self.arg, self.dims)
@@ -131,12 +149,6 @@ function grad(self::Contract, d::Int)
     lgrad = Contract(grad(self.left, d), self.right, [self.linds..., newsym], self.rinds, [self.tinds..., newsym])
     rgrad = Contract(self.left, grad(self.right, d), self.linds, [self.rinds..., newsym], [self.tinds..., newsym])
     Sum(lgrad, rgrad)
-end
-
-function grad(self::Inv, d::Int)
-    sgrad = grad(self.source, d)
-    temp = self * sgrad
-    -Contract(self * sgrad, self, [1, 2, 3], [2, 4], [1, 4, 3])
 end
 
 function grad(self::Monomials, d::Int)
@@ -170,6 +182,7 @@ grad(self::Constant, d::Int) = Zeros(eltype(self), size(self)..., d)
 grad(self::GetIndex, d::Int) = getindex(grad(self.value, d), self.indices..., :)
 grad(self::Inflate, d::Int) = Inflate(grad(self.data, d), (size(self)..., d), (self.indices..., :))
 grad(self::InsertAxis, d::Int) = InsertAxis(grad(self.source, d), self.axes)
+grad(self::Inv, d::Int) = -Contract(self, self * grad(self.source, d), 2; fromright=true)
 grad(self::Neg, d::Int) = -grad(self.source, d)
 grad(self::Zeros, d::Int) = Zeros(eltype(self), size(self)..., d)
 
