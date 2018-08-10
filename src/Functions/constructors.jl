@@ -33,6 +33,23 @@ Base.:*(left::ArrayEvaluable, right::ArrayEvaluable) = Contract(left, right)
 Base.:*(left::ArrayEvaluable, right) = Contract(left, asarray(right))
 Base.:*(left, right::ArrayEvaluable) = Contract(asarray(left), right)
 
+# Ensure that Inflate commutes past Contract
+function Contract(left::Inflate, right::ArrayEvaluable, linds::Vector, rinds::Vector, tinds::Vector)
+    # Find the index expressions associated with the axes that are contracted over,
+    # apply a corresponding getindex followed by a contraction
+    contr_indices = Dict(axid => left.indices[i] for (i, axid) in enumerate(linds) if axid in rinds)
+    new_right = right[(get(contr_indices, axid, :) for axid in rinds)...]
+    new_contraction = Contract(left.data, new_right, linds, rinds, tinds)
+
+    # Inflate the output
+    new_inds = [(axid in linds ? left.indices[indexin(axid, linds)[]] : (:)) for axid in tinds]
+    new_shape = Tuple(
+        axid in linds ? size(left, indexin(axid, linds)[]) : size(right, indexin(axid, rinds)[])
+        for axid in tinds
+    )
+    Inflate(new_contraction, new_shape, new_inds...)
+end
+
 
 
 # GetIndex
