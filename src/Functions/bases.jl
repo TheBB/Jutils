@@ -12,36 +12,54 @@ optimize(x::Any) = x
 restype(self::Evaluable{T}) where T = T
 typetree(self::Evaluable) = [typeof(self).name.name, (typetree(arg) for arg in arguments(self))...]
 
-ast(self::Evaluable) = ast!(self, Set{Evaluable}(), dependencies(self))
+# For internal use by the compiler
+mutable struct FunctionData
+    func :: Evaluable
+    arginds :: Vector{Int}
+    tgtsym :: Union{Symbol,Nothing}
+    allocexprs :: Vector{Any}
+    allocsyms :: Vector{Symbol}
 
-function ast!(self::Evaluable, seen::Set{Evaluable}, indices::OrderedDict{Evaluable,Int})
-    self in seen && return string("%", string(indices[self]))
+    FunctionData(func::Evaluable) = new(func)
+end
+
+function linearize(self::Evaluable)
+    indices = OrderedDict{Evaluable,Int}()
+    linearize!(indices, self)
+    sequence = [FunctionData(func) for (func, index) in indices]
+    for data in sequence
+        data.arginds = [indices[arg] for arg in arguments(data.func)]
+    end
+    sequence
+end
+
+function linearize!(indices::OrderedDict{Evaluable,Int}, self::Evaluable)
+    haskey(indices, self) && return
+    for func in arguments(self)
+        linearize!(indices, func)
+    end
+    indices[self] = length(indices) + 1
+end
+
+function ast(self::Evaluable)
+    sequence = linearize(self)
+    ast!(length(sequence), Set{Int}(), linearize(self))
+end
+
+function ast!(index::Int, seen::Set{Int}, sequence::Vector{FunctionData})
+    index in seen && return string("%", string(index))
 
     s = ""
-    args = Stateful(arguments(self))
-    for arg in args
-        bridge = isdone(args) ? flatten((("└─",), repeated("  "))) : flatten((("├─",), repeated("│ ")))
-        sublines = split(ast!(arg, seen, indices), "\n")
+    argids = Stateful(sequence[index].arginds)
+    for argid in argids
+        bridge = isdone(argids) ? flatten((("└─",), repeated("  "))) : flatten((("├─",), repeated("│ ")))
+        sublines = split(ast!(argid, seen, sequence), "\n")
         subtree = join((string(b, s) for (b, s) in zip(bridge, sublines)), "\n")
         s = string(s, "\n", subtree)
     end
 
-    push!(seen, self)
-    string("%", string(indices[self]), " = ", repr(self), s)
-end
-
-function dependencies(self::Evaluable)
-    indices = OrderedDict{Evaluable,Int}()
-    dependencies!(indices, self)
-    indices
-end
-
-function dependencies!(indices::OrderedDict{Evaluable,Int}, self::Evaluable)
-    haskey(indices, self) && return
-    for func in arguments(self)
-        dependencies!(indices, func)
-    end
-    indices[self] = length(indices) + 1
+    push!(seen, index)
+    string("%", string(index), " = ", repr(sequence[index].func), s)
 end
 
 
@@ -105,22 +123,25 @@ separate(self::ArrayEvaluable) = [(Tuple(Constant(collect(1:n)) for n in size(se
 # Compilation
 
 function _compile(infunc::Evaluable, show::Bool)
-    funcindices = dependencies(infunc)
-    tgtsymbols = Dict(func => gensym(string(index)) for (func, index) in funcindices)
-    allocexprs = Dict(func => prealloc(func) for func in keys(funcindices))
-    allocsymbols = Dict(func => [gensym("alloc") for _ in 1:length(exprs)] for (func, exprs) in allocexprs)
+    sequence = linearize(infunc)
+    for data in sequence
+        data.tgtsym = gensym()
+        data.allocexprs = prealloc(data.func)
+        data.allocsyms = [gensym() for _ in 1:length(data.allocexprs)]
+    end
 
-    # Create the allocating function
+    # Code for allocation
     alloccode = Vector{Expr}()
-    evalcode = Vector{Expr}()
-    for func = keys(funcindices)
-        for (sym, expr) in zip(allocsymbols[func], allocexprs[func])
-            push!(alloccode, :($sym = $expr))
-        end
+    for data in sequence, (sym, expr) in zip(data.allocsyms, data.allocexprs)
+        push!(alloccode, :($sym = $expr))
+    end
 
-        argsyms = [tgtsymbols[arg] for arg in arguments(func)]
-        tgtsym = tgtsymbols[func]
-        push!(evalcode, :($tgtsym = $(codegen(func, argsyms..., allocsymbols[func]...))))
+    # Code for evaluation
+    evalcode = Vector{Expr}()
+    for data in sequence
+        argsyms = [sequence[argid].tgtsym for argid in data.arginds]
+        tgtsym = data.tgtsym
+        push!(evalcode, :($(data.tgtsym) = $(codegen(data.func, argsyms..., data.allocsyms...))))
     end
 
     typeinfo = [(:point, Vector{Float64}), (:element, Element)]

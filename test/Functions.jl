@@ -41,7 +41,7 @@ end
     @test val == [1.0, 2.0, 3.0]
 
     func = Sum((Constant([0.0]), Constant([0.0])))
-    @test length(Functions.dependencies(func)) == 2
+    @test length(Functions.linearize(func)) == 2
 end
 
 @testset "Contract" begin
