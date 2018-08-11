@@ -3,7 +3,7 @@ module Integration
 import SparseArrays: sparse
 
 import ..Elements: ReferenceElement, quadrule
-import ..Functions: CompiledDenseArrayFunction, CompiledSparseArrayFunction
+import ..Functions: callable, CompiledDenseArrayFunction, CompiledSparseArrayFunction
 import ..Topologies: Topology, Line, refelems
 
 export integrate
@@ -15,10 +15,11 @@ function integrate(func::CompiledDenseArrayFunction{T}, domain::Topology, npts::
     )
 
     result = zeros(T, size(func)...)
+    kernel = callable(func)
     for elem in domain
         (pts, wts) = quadrules[elem.reference]
         for i = 1:length(wts)
-            result .+= func([pts[i]], elem) .* wts[i]
+            result .+= kernel([pts[i]], elem) .* wts[i]
         end
     end
 
@@ -40,16 +41,18 @@ function integrate(func::CompiledSparseArrayFunction{T,2}, domain::Topology, npt
     J = zeros(Int, totlength, nelems)
     V = zeros(T, totlength, nelems)
 
+    ikernel, dkernel = callable(func)
     for (elemid, elem) in enumerate(domain)
         (pts, wts) = quadrules[elem.reference]
 
-        for (ix, (blockI, blockJ)) in zip(blockindices, func.indices([pts[1]], elem))
+        # TODO: This can surely be done better
+        for (ix, (blockI, blockJ)) in zip(blockindices, ikernel([pts[1]], elem))
             I[ix, elemid] = Int[i for (i, _) in Iterators.product(blockI, blockJ)][:]
             J[ix, elemid] = Int[j for (_, j) in Iterators.product(blockI, blockJ)][:]
         end
 
         for i = 1:length(wts)
-            data = func.data([pts[i]], elem)
+            data = dkernel([pts[i]], elem)
             for (ix, d) in zip(blockindices, data)
                 V[ix, elemid] .+= d[:] .* wts[i]
             end

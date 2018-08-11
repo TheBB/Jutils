@@ -67,37 +67,32 @@ end
 # Compiled functions
 
 struct CompiledFunction{T}
-    callable :: Function
+    kernel :: Function
 end
 
-@inline function (self::CompiledFunction{T})(point::Vector{Float64}, element::Element) where T
-    self.callable(point, element)
-end
-
+callable(self::CompiledFunction) = Base.invokelatest(self.kernel)
 restype(self::CompiledFunction{T}) where T = T
 
 
 struct CompiledDenseArrayFunction{T,N}
-    callable :: Function
+    kernel :: Function
     shape :: Shape
 end
 
-@inline function (self::CompiledDenseArrayFunction{T,N})(point::Vector{Float64}, element::Element) where {T,N}
-    self.callable(point, element)
-end
-
 Base.size(self::CompiledDenseArrayFunction) = self.shape
+callable(self::CompiledDenseArrayFunction) = Base.invokelatest(self.kernel)
 restype(self::CompiledDenseArrayFunction{T}) where T = T
 
 
 struct CompiledSparseArrayFunction{T,N}
-    indices :: CompiledFunction
-    data :: CompiledFunction
+    ikernel :: CompiledFunction
+    dkernel :: CompiledFunction
     blockshapes :: Vector{Shape}
     shape :: Shape
 end
 
 Base.size(self::CompiledSparseArrayFunction) = self.shape
+callable(self::CompiledSparseArrayFunction) = (callable(self.ikernel), callable(self.dkernel))
 restype(self::CompiledSparseArrayFunction{T}) where T = T
 
 
@@ -160,7 +155,7 @@ function _compile(infunc::Evaluable, show::Bool)
     Core.eval(mod, :(import TensorOperations))
     Core.eval(mod, definition)
 
-    Base.invokelatest(mod.mkevaluate)
+    mod.mkevaluate
 end
 
 compile(func::Evaluable{T}; show::Bool=false) where T =

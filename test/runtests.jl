@@ -14,6 +14,8 @@ using Jutils.Topologies
 const lineelt = Element(Simplex{1}(), 1, ())
 const squareelt = Element(Tensor([Simplex{1}(), Simplex{1}()]), 1, ())
 
+ev(func, pt, elt) = callable(func)(pt, elt)
+
 
 @testset "Transforms" begin include("Transforms.jl") end
 
