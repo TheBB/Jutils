@@ -64,39 +64,6 @@ end
 
 
 
-# Compiled functions
-
-struct CompiledFunction{T}
-    kernel :: Function
-end
-
-callable(self::CompiledFunction) = Base.invokelatest(self.kernel)
-restype(self::CompiledFunction{T}) where T = T
-
-
-struct CompiledDenseArrayFunction{T,N}
-    kernel :: Function
-    shape :: Shape
-end
-
-Base.size(self::CompiledDenseArrayFunction) = self.shape
-callable(self::CompiledDenseArrayFunction) = Base.invokelatest(self.kernel)
-restype(self::CompiledDenseArrayFunction{T}) where T = T
-
-
-struct CompiledSparseArrayFunction{T,N}
-    ikernel :: CompiledFunction
-    dkernel :: CompiledFunction
-    blockshapes :: Vector{Shape}
-    shape :: Shape
-end
-
-Base.size(self::CompiledSparseArrayFunction) = self.shape
-callable(self::CompiledSparseArrayFunction) = (callable(self.ikernel), callable(self.dkernel))
-restype(self::CompiledSparseArrayFunction{T}) where T = T
-
-
-
 # Array functions
 
 abstract type ArrayEvaluable{T,N} <: Evaluable{Array{T,N}} end
@@ -112,6 +79,36 @@ Base.size(self::ArrayEvaluable, dim::Int) = size(self)[dim]
 Base.show(io::IO, self::ArrayEvaluable) = print(io, string(typeof(self).name.name), size(self))
 
 separate(self::ArrayEvaluable) = [(Tuple(Constant(collect(1:n)) for n in size(self)), self)]
+
+
+
+# Compiled functions
+
+struct Compiled{T}
+    kernel :: Function
+end
+
+callable(self::Compiled) = Base.invokelatest(self.kernel)
+
+
+struct CompiledArray{T,N}
+    kernel :: Function
+    shape :: Shape
+end
+
+Base.size(self::CompiledArray) = self.shape
+callable(self::CompiledArray) = Base.invokelatest(self.kernel)
+
+
+struct CompiledSparseArray{T,N}
+    ikernel :: Compiled
+    dkernel :: Compiled
+    blockshapes :: Vector{Shape}
+    shape :: Shape
+end
+
+Base.size(self::CompiledSparseArray) = self.shape
+callable(self::CompiledSparseArray) = (callable(self.ikernel), callable(self.dkernel))
 
 
 
@@ -159,11 +156,11 @@ function _compile(infunc::Evaluable, show::Bool)
 end
 
 compile(func::Evaluable{T}; show::Bool=false) where T =
-    CompiledFunction{T}(Base.invokelatest(_compile, func, show))
+    Compiled{T}(Base.invokelatest(_compile, func, show))
 
 function compile(func::ArrayEvaluable{T,N}; show::Bool=false, dense::Bool=true) where {T,N}
     if dense
-        CompiledDenseArrayFunction{T,N}(Base.invokelatest(_compile, func, show), size(func))
+        CompiledArray{T,N}(Base.invokelatest(_compile, func, show), size(func))
     else
         blocks = separate(func)
         indices = Tupl((Tupl(inds...) for (inds, _) in blocks)...)
@@ -173,6 +170,6 @@ function compile(func::ArrayEvaluable{T,N}; show::Bool=false, dense::Bool=true) 
         iselconstant(indices) || error("Index function must be elementwise constant")
         indfunc = compile(indices; show=show)
         datafunc = compile(data; show=show)
-        CompiledSparseArrayFunction{T,N}(indfunc, datafunc, blockshapes, size(func))
+        CompiledSparseArray{T,N}(indfunc, datafunc, blockshapes, size(func))
     end
 end

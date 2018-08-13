@@ -12,7 +12,7 @@ import ..Elements: Element
 
 # Base exports
 export ast, callable, compile, isconstant, iselconstant, optimize, restype, typetree
-export CompiledDenseArrayFunction, CompiledFunction
+export CompiledArray, CompiledSparseArray, Compiled
 
 # Type exports
 export Shape, Index, Indices

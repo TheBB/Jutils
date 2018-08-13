@@ -3,13 +3,13 @@ module Integration
 import SparseArrays: sparse
 
 import ..Elements: ReferenceElement, quadrule
-import ..Functions: callable, CompiledDenseArrayFunction, CompiledSparseArrayFunction
+import ..Functions: callable, CompiledArray, CompiledSparseArray
 import ..Topologies: Topology, Line, refelems
 
 export integrate
 
 
-function integrate(func::CompiledDenseArrayFunction{T}, domain::Topology, npts::Int) where T
+function integrate(func::CompiledArray{T}, domain::Topology, npts::Int) where T
     quadrules = Dict{ReferenceElement, Tuple{Vector{Float64}, Vector{Float64}}}(
         elem => quadrule(elem, npts) for elem in refelems(domain)
     )
@@ -26,7 +26,7 @@ function integrate(func::CompiledDenseArrayFunction{T}, domain::Topology, npts::
     result
 end
 
-function integrate(func::CompiledSparseArrayFunction{T,2}, domain::Topology, npts::Int) where T
+function integrate(func::CompiledSparseArray{T,2}, domain::Topology, npts::Int) where T
     quadrules = Dict{ReferenceElement, Tuple{Vector{Float64}, Vector{Float64}}}(
         elem => quadrule(elem, npts) for elem in refelems(domain)
     )
