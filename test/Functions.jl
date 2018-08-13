@@ -12,7 +12,7 @@
 end
 
 @testset "ApplyTransform" begin
-    func = compile(ApplyTransform(trans, Point{1}(), 1))
+    func = compile(ApplyTransform(trans, Point(1), 1))
 
     val = ev(func, [0.5], lineelt)
     @test val == [0.5]
@@ -22,7 +22,7 @@ end
 end
 
 @testset "ApplyTransformGrad" begin
-    func = compile(ApplyTransformGrad(trans, Point{1}(), 1))
+    func = compile(ApplyTransformGrad(trans, Point(1), 1))
     val = ev(func, [0.5], lineelt)
     @test val == fill(1.0, (1,1))
 end

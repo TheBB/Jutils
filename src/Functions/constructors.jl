@@ -156,9 +156,9 @@ function grad(self::ApplyTransform, d::Int)
     ApplyTransformGrad(self.trans, self.arg, self.dims)
 end
 
-function grad(self::Point{N}, d::Int) where N
-    N == d || error("Inconsistent number of dimensions")
-    Constant(Matrix(1.0I, N, N))
+function grad(self::Point, d::Int)
+    self.ndims == d || error("Inconsistent number of dimensions")
+    Constant(Matrix(1.0I, d, d))
 end
 
 function grad(self::Contract, d::Int)
@@ -267,4 +267,4 @@ const trans = Argument{TransformChain}(:(element.transform), false, true)
 
 outer(left::ArrayEvaluable, right::ArrayEvaluable) = InsertAxis(left, 1) .* InsertAxis(right, 2)
 outer(self::ArrayEvaluable) = outer(self, self)
-rootcoords(ndims::Int) = ApplyTransform(trans, Point{ndims}(), ndims)
+rootcoords(ndims::Int) = ApplyTransform(trans, Point(ndims), ndims)

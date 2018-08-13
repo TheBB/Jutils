@@ -33,12 +33,14 @@ codegen(self::ArrayArgument) = self.expression
 
 # Quadrature point (reference coordinates)
 
-@autohasheq struct Point{N} <: ArrayEvaluable{Float64,1} end
+@autohasheq struct Point <: ArrayEvaluable{Float64,1}
+    ndims :: Int
+end
 
 arguments(self::Point) = ()
 isconstant(::Point) = false
 iselconstant(::Point) = false
-Base.size(self::Point{N}) where {T,N} = (N::Int,)
+Base.size(self::Point) = (self.ndims,)
 prealloc(::Point) = []
 codegen(self::Point) = :point
 
