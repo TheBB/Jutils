@@ -262,6 +262,7 @@ Broadcast.broadcasted(::typeof(-), self::ArrayEvaluable) = Neg(self)
 
 # Miscellaneous
 
+const element = Argument{Element}(:element, false, true)
 const elemindex = ArrayArgument{Int,0}(:(fill(element.index, ())), false, true, ())
 const trans = Argument{TransformChain}(:(element.transform), false, true)
 
