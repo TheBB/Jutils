@@ -180,7 +180,7 @@ end
 end
 
 @testset "Tupl" begin
-    func = compile(Tupl(Constant(1), Constant(2.0)))
+    func = compile(Tupl((Constant(1), Constant(2.0))))
     val = ev(func, [0.5], lineelt)
     @test val == (fill(1, ()), fill(2.0, ()))
 end

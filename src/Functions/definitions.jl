@@ -191,7 +191,7 @@ end
 arguments(self::Inflate) = (self.data, (i for i in self.indices if isa(i, Evaluable))...)
 Base.size(self::Inflate) = self.shape
 separate(self::Inflate) = [
-    ((((isa(ix, Colon) ? ind : getindex(ix, ind)) for (ix, ind) in zip(self.indices, inds))...,), data)
+    (Tupl((isa(ix, Colon) ? ind : getindex(ix, ind)) for (ix, ind) in zip(self.indices, inds)), data)
     for (inds, data) in separate(self.data)
 ]
 prealloc(self::Inflate{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
@@ -381,12 +381,17 @@ end
 @autohasheq struct Tupl{T} <: Evaluable{T}
     terms :: Tuple{Vararg{Evaluable}}
 
-    function Tupl(terms::Evaluable...)
+    function Tupl(terms)
+        terms = Tuple(terms)
         # TODO: Is there a better way to do this?
         tupletype = eval(:(Tuple{$((restype(term) for term in terms)...)}))
         new{tupletype}(terms)
     end
 end
+
+Base.iterate(self::Tupl) = iterate(self.terms)
+Base.iterate(self::Tupl, i::Int) = iterate(self.terms, i)
+Base.length(self::Tupl) = length(self.terms)
 
 arguments(self::Tupl) = self.terms
 prealloc(self::Tupl) = []

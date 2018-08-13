@@ -77,7 +77,7 @@ Base.ndims(self::ArrayEvaluable{T,N}) where {T,N} = N :: Int
 Base.size(self::ArrayEvaluable, dim::Int) = size(self)[dim]
 Base.show(io::IO, self::ArrayEvaluable) = print(io, string(typeof(self).name.name), size(self))
 
-separate(self::ArrayEvaluable) = [(Tuple(Constant(collect(1:n)) for n in size(self)), self)]
+separate(self::ArrayEvaluable) = [(Tupl(Constant(collect(1:n)) for n in size(self)), self)]
 
 
 
@@ -163,7 +163,7 @@ function compile(func::ArrayEvaluable{T,N}; show::Bool=false, dense::Bool=true) 
         blocks = separate(func)
         @assert length(blocks) == 1
         inds, data = blocks[1]
-        ikernel = compile(Tupl(inds...); show=show)
+        ikernel = compile(inds; show=show)
         dkernel = compile(data; show=show)
         CompiledSparseArray{T,N}(ikernel, dkernel, size(func), size(data))
     end
