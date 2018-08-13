@@ -32,9 +32,7 @@ function integrate(func::CompiledSparseArray{T,2}, domain::Topology, npts::Int) 
     )
 
     # Compute total amount of data
-    blocklengths = [prod(shape) for shape in func.blockshapes]
-    blockindices = [cs-l+1:l for (l,cs) in zip(blocklengths, cumsum(blocklengths))]
-    totlength = sum(blocklengths)
+    totlength = prod(func.blockshape)
     nelems = length(domain)
 
     I = zeros(Int, totlength, nelems)
@@ -46,20 +44,17 @@ function integrate(func::CompiledSparseArray{T,2}, domain::Topology, npts::Int) 
         (pts, wts) = quadrules[elem.reference]
 
         # TODO: This can surely be done better
-        for (ix, (blockI, blockJ)) in zip(blockindices, ikernel([pts[1]], elem))
-            I[ix, elemid] = Int[i for (i, _) in Iterators.product(blockI, blockJ)][:]
-            J[ix, elemid] = Int[j for (_, j) in Iterators.product(blockI, blockJ)][:]
-        end
+        blockI, blockJ = ikernel([pts[1]], elem)
+        I[:, elemid] = Int[i for (i, _) in Iterators.product(blockI, blockJ)][:]
+        J[:, elemid] = Int[j for (_, j) in Iterators.product(blockI, blockJ)][:]
 
         for i = 1:length(wts)
             data = dkernel([pts[i]], elem)
-            for (ix, d) in zip(blockindices, data)
-                V[ix, elemid] .+= d[:] .* wts[i]
-            end
+            V[:, elemid] += data[:] .* wts[i]
         end
     end
 
-    sparse(I[:], J[:], V[:])
+    sparse(I[:], J[:], V[:], size(func)...)
 end
 
 end # module

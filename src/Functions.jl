@@ -11,7 +11,7 @@ import ..Transforms: TransformChain
 import ..Elements: Element
 
 # Base exports
-export ast, callable, compile, isconstant, iselconstant, optimize, restype, typetree
+export ast, callable, compile, isconstant, iselconstant, restype, typetree
 export CompiledArray, CompiledSparseArray, Compiled
 
 # Type exports

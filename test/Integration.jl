@@ -10,7 +10,7 @@
         1 => fill(1/6, (5,)),
     )
 
-    func = compile(optimize(pfunc))
+    func = compile(pfunc)
     mass = integrate(func, domain, 2)
     @test mass ≈ diagm(
         -1 => fill(1/6, (5,)),
@@ -18,7 +18,7 @@
         1 => fill(1/6, (5,)),
     )
 
-    func = compile(optimize(pfunc); dense=false)
+    func = compile(pfunc; dense=false)
     mass = integrate(func, domain, 2)
     @test isa(mass, SparseMatrixCSC)
     @test nnz(mass) == 16
@@ -33,7 +33,7 @@ end
     domain, _ = line(5)
 
     pfunc = outer(grad(mkbasis(domain, Lagrange, 1), 1)[:,1])
-    func = compile(optimize(pfunc); dense=false)
+    func = compile(pfunc; dense=false)
     mass = integrate(func, domain, 1)
     @test isa(mass, SparseMatrixCSC)
     @test nnz(mass) == 16
@@ -48,7 +48,7 @@ end
     domain, geom = line(5)
 
     pfunc = outer(grad(mkbasis(domain, Lagrange, 1), geom)[:,1])
-    func = compile(optimize(pfunc); dense=false)
+    func = compile(pfunc; dense=false)
     mass = integrate(func, domain, 1)
     @test isa(mass, SparseMatrixCSC)
     @test nnz(mass) == 16
@@ -59,7 +59,7 @@ end
     )
 
     pfunc = outer(grad(mkbasis(domain, Lagrange, 1), 2 .* geom)[:,1])
-    func = compile(optimize(pfunc); dense=false)
+    func = compile(pfunc; dense=false)
     mass = integrate(func, domain, 1)
     @test isa(mass, SparseMatrixCSC)
     @test nnz(mass) == 16
@@ -70,7 +70,7 @@ end
     )
 
     pfunc = outer(grad(mkbasis(domain, Lagrange, 1), 0.5 .* geom)[:,1])
-    func = compile(optimize(pfunc); dense=false)
+    func = compile(pfunc; dense=false)
     mass = integrate(func, domain, 1)
     @test isa(mass, SparseMatrixCSC)
     @test nnz(mass) == 16

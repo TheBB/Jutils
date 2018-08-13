@@ -39,7 +39,6 @@ arguments(self::Point) = ()
 isconstant(::Point) = false
 iselconstant(::Point) = false
 Base.size(self::Point{N}) where {T,N} = (N::Int,)
-optimize(self::Point) = self
 prealloc(::Point) = []
 codegen(self::Point) = :point
 
@@ -55,7 +54,6 @@ end
 
 arguments(self::ApplyTransform) = (self.trans, self.arg)
 Base.size(self::ApplyTransform) = (self.dims,)
-optimize(self::ApplyTransform) = ApplyTransform(optimize(self.trans), optimize(self.arg), dims)
 prealloc(self::ApplyTransform) = []
 codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $trans))
 
@@ -71,7 +69,6 @@ end
 
 arguments(self::ApplyTransformGrad) = (self.trans, self.arg)
 Base.size(self::ApplyTransformGrad) = (self.dims, self.dims)
-optimize(self::ApplyTransformGrad) = ApplyTransformGrad(optimize(self.trans), optimize(self.arg), self.dims)
 prealloc(self::ApplyTransformGrad) = []
 codegen(self::ApplyTransformGrad, trans, arg) = :(applytrans_grad($arg, $trans))
 
@@ -120,7 +117,6 @@ function Base.size(self::Contract)
 end
 
 arguments(self::Contract) = (self.left, self.right)
-optimize(self::Contract) = Contract(optimize(self.left), optimize(self.right), self.linds, self.rinds, self.tinds)
 prealloc(self::Contract{T}) where T = [:((Array{$T})(undef, $(size(self)...)))]
 
 function codegen(self::Contract, left, right, target)
@@ -157,7 +153,6 @@ end
 
 arguments(self::GetIndex) = (self.value, (i for i in self.indices if isa(i, Evaluable))...)
 Base.size(self::GetIndex) = index_resultsize(size(self.value), self.indices)
-optimize(self::GetIndex) = getindex(optimize(self.value), (optimize(i) for i in self.indices)...)
 prealloc(self::GetIndex) = []
 
 function codegen(self::GetIndex, value, varindices...)
@@ -195,7 +190,6 @@ end
 
 arguments(self::Inflate) = (self.data, (i for i in self.indices if isa(i, Evaluable))...)
 Base.size(self::Inflate) = self.shape
-optimize(self::Inflate) = Inflate(optimize(self.data), self.shape, Index[optimize(i) for i in self.indices])
 separate(self::Inflate) = [
     ((((isa(ix, Colon) ? ind : getindex(ix, ind)) for (ix, ind) in zip(self.indices, inds))...,), data)
     for (inds, data) in separate(self.data)
@@ -233,7 +227,6 @@ function Base.size(self::InsertAxis)
     insertmany!(shape, self.axes, 1)
     Tuple(shape)
 end
-optimize(self::InsertAxis) = InsertAxis(optimize(self.source), self.axes)
 prealloc(self::InsertAxis) = []
 codegen(self::InsertAxis, source) = :(reshape($source, $(size(self)...)))
 
@@ -252,7 +245,6 @@ end
 
 arguments(self::Inv) = (self.source,)
 Base.size(self::Inv) = size(self.source)
-optimize(self::Inv) = inv(optimize(self.source))
 prealloc(self::Inv{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 # Would be useful with an inv! function here
@@ -295,7 +287,6 @@ end
 
 arguments(self::Monomials) = (self.points,)
 Base.size(self::Monomials) = (self.degree + self.padding + 1, size(self.points)...)
-optimize(self::Monomials) = Monomials(optimize(self.points), self.degree, self.padding)
 prealloc(self::Monomials{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Monomials{T}, points, target) where T
@@ -325,7 +316,6 @@ end
 
 arguments(self::Neg) = (self.source,)
 Base.size(self::Neg) = size(self.source)
-optimize(self::Neg) = Neg(optimize(self.source))
 prealloc(self::Neg) = []
 codegen(::Neg, source) = :(-$source)
 
@@ -345,7 +335,6 @@ end
 
 arguments(self::Product) = self.terms
 Base.size(self::Product) = broadcast_shape((size(term) for term in self.terms)...)
-optimize(self::Product) = .*((optimize(term) for term in self.terms)...)
 prealloc(self::Product{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 # Note: element-wise product!
@@ -375,7 +364,6 @@ Sum(terms...) = Sum(terms)
 
 arguments(self::Sum) = self.terms
 Base.size(self::Sum) = broadcast_shape((size(term) for term in self.terms)...)
-optimize(self::Sum) = Sum(Tuple(optimize(term) for term in self.terms))
 prealloc(self::Sum{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Sum, args...)
@@ -401,7 +389,6 @@ end
 end
 
 arguments(self::Tupl) = self.terms
-optimize(self::Tupl) = Tupl((optimize(term) for term in self.terms)...)
 prealloc(self::Tupl) = []
 codegen(self::Tupl, terms...) = :($(terms...),)
 
@@ -416,7 +403,6 @@ end
 
 arguments(::Zeros) = ()
 Base.size(self::Zeros) = self.shape
-optimize(self::Zeros) = self
 separate(::Zeros) = []
 prealloc(self::Zeros{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 codegen(self::Zeros{T}, target) where T = :($target[:] .= zero($T); $target)

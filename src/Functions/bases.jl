@@ -8,7 +8,6 @@ isconstant(::Any) = true
 isconstant(self::Evaluable) = all(isconstant(arg) for arg in arguments(self))
 iselconstant(::Any) = true
 iselconstant(self::Evaluable) = all(iselconstant(arg) for arg in arguments(self))
-optimize(x::Any) = x
 restype(self::Evaluable{T}) where T = T
 typetree(self::Evaluable) = [typeof(self).name.name, (typetree(arg) for arg in arguments(self))...]
 
@@ -102,9 +101,9 @@ callable(self::CompiledArray) = Base.invokelatest(self.kernel)
 
 struct CompiledSparseArray{T,N}
     ikernel :: Compiled
-    dkernel :: Compiled
-    blockshapes :: Vector{Shape}
+    dkernel :: CompiledArray{T,N}
     shape :: Shape
+    blockshape :: Shape
 end
 
 Base.size(self::CompiledSparseArray) = self.shape
@@ -155,21 +154,17 @@ function _compile(infunc::Evaluable, show::Bool)
     mod.mkevaluate
 end
 
-compile(func::Evaluable{T}; show::Bool=false) where T =
-    Compiled{T}(Base.invokelatest(_compile, func, show))
+compile(func::Evaluable{T}; show::Bool=false) where T = Compiled{T}(Base.invokelatest(_compile, func, show))
 
 function compile(func::ArrayEvaluable{T,N}; show::Bool=false, dense::Bool=true) where {T,N}
     if dense
         CompiledArray{T,N}(Base.invokelatest(_compile, func, show), size(func))
     else
         blocks = separate(func)
-        indices = Tupl((Tupl(inds...) for (inds, _) in blocks)...)
-        data = Tupl((data for (_, data) in blocks)...)
-        blockshapes = Shape[size(data) for (_, data) in blocks]
-
-        iselconstant(indices) || error("Index function must be elementwise constant")
-        indfunc = compile(indices; show=show)
-        datafunc = compile(data; show=show)
-        CompiledSparseArray{T,N}(indfunc, datafunc, blockshapes, size(func))
+        @assert length(blocks) == 1
+        inds, data = blocks[1]
+        ikernel = compile(Tupl(inds...); show=show)
+        dkernel = compile(data; show=show)
+        CompiledSparseArray{T,N}(ikernel, dkernel, size(func), size(data))
     end
 end
