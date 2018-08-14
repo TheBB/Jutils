@@ -41,7 +41,7 @@ end
 
 @testset "Inflate" begin
     index = Constant([3, 5])
-    func = grad(Inflate(Point(2), (7,), index), 2)
+    func = grad(Inflate(Point(2), (7,), 1 => index), 2)
     @test size(func) == (7, 2)
     val = ev(compile(func), [0.0, 0.0], squareelt)
     @test val == [0.0 0.0; 0.0 0.0; 1.0 0.0; 0.0 0.0; 0.0 1.0; 0.0 0.0; 0.0 0.0]

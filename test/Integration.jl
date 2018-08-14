@@ -10,14 +10,6 @@
         1 => fill(1/6, (5,)),
     )
 
-    func = compile(pfunc)
-    mass = integrate(func, domain, 2)
-    @test mass ≈ diagm(
-        -1 => fill(1/6, (5,)),
-        0 => vcat([1/3], fill(2/3, (4,)), [1/3]),
-        1 => fill(1/6, (5,)),
-    )
-
     func = compile(pfunc; dense=false)
     mass = integrate(func, domain, 2)
     @test isa(mass, SparseMatrixCSC)

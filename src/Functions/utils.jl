@@ -67,30 +67,47 @@ end
 
 
 
-# Indexing
+# Utility type for handling several types of indexing operations
 
-index_dimcheck(indices::Indices, low::Int=0, hi::Int=typemax(Int)) =
-    all(low <= (isa(ix, Colon) ? 1 : ndims(ix)) <= hi for ix in indices)
+struct IndexMap
+    data :: OrderedDict{Int, ArrayEvaluable{Int}}
 
-function index_resultsize(shape::Shape, indices::Indices)
-    length(shape) == length(indices) || error("Inconsistent indexing")
-    Tuple(flatten(isa(ix, Colon) ? (s,) : size(ix) for (s, ix) in zip(shape, indices)))
-end
-
-function index_weave(spec::Indices, actual)
-    actual = collect(actual)
-    weaved = []
-    for s in spec
-        if isa(s, Colon)
-            push!(weaved, :(:))
-        elseif isa(s, Int) || isa(s, Array{Int})
-            push!(weaved, :($s))
-        else
-            push!(weaved, popfirst!(actual))
-        end
+    IndexMap(data::OrderedDict{Int, ArrayEvaluable{Int}}) = new(data)
+    function IndexMap(indices::Pair...)
+        new(OrderedDict{Int, ArrayEvaluable{Int}}(k => asarray(v) for (k,v) in indices))
     end
-    weaved
+    function IndexMap(indices...)
+        new(OrderedDict{Int, ArrayEvaluable{Int}}(k => asarray(v) for (k,v) in enumerate(indices) if !isa(v, Colon)))
+    end
 end
+
+Base.get(self::IndexMap, i::Int, default) = get(self.data, i, default)
+Base.getindex(map::IndexMap, array) = getindex(array, (get(map, i, :) for i in 1:ndims(array))...)
+Base.getindex(self::IndexMap, i::Int) = get(self.data, i, :)
+Base.isempty(self::IndexMap) = isempty(self.data)
+Base.iterate(self::IndexMap) = iterate(self.data)
+Base.iterate(self::IndexMap, state) = iterate(self.data, state)
+Base.keys(self::IndexMap) = keys(self.data)
+Base.ndims(self::IndexMap, i::Int) = i in keys(self.data) ? ndims(self.data[i]) : 1
+Base.size(self::IndexMap, i::Int) = size(self.data[i])
+Base.size(self::IndexMap, i::Int, j::Int) = size(self.data[i], j)
+Base.size(self::IndexMap, s::Shape, i::Int) = i in keys(self.data) ? size(self.data[i]) : (s[i],)
+Base.values(self::IndexMap) = values(self.data)
+
+dimcheck(self::IndexMap, low::Int=0, hi::Int=typemax(Int)) =
+    all(low <= ndims(self, i) <= hi for i in keys(self))
+
+resultndims(self::IndexMap, d::Int) = reduce(+, (ndims(v)-1 for v in values(self.data)); init=0) + d
+resultsize(self::IndexMap, shape::Shape) = Tuple(flatten(size(self, shape, i) for i in 1:length(shape)))
+
+function codegen(self::IndexMap, values, d::Int)
+    subst = OrderedDict(zip(keys(self), values))
+    ((get(subst, i, :) for i in 1:d)...,)
+end
+
+
+
+# Miscellaneous
 
 function insertmany!(target::Vector{T}, axes, value::T) where T
     sortaxes = reverse(sort(collect(Int, axes)))

@@ -37,75 +37,66 @@ Base.:*(left, right::ArrayEvaluable) = Contract(asarray(left), right)
 function Contract(left::Inflate, right::ArrayEvaluable, linds::Vector, rinds::Vector, tinds::Vector)
     # Find the index expressions associated with the axes that are contracted over,
     # apply a corresponding getindex followed by a contraction
-    contr_indices = Dict(axid => left.indices[i] for (i, axid) in enumerate(linds) if axid in rinds)
+    contr_indices = Dict(axid => get(left.map, i, :) for (i, axid) in enumerate(linds))
     new_right = right[(get(contr_indices, axid, :) for axid in rinds)...]
     new_contraction = Contract(left.data, new_right, linds, rinds, tinds)
 
+    # Mappings from name to axis index for both the left and right
+    lmap = Dict(k => v for (v,k) in enumerate(linds))
+    rmap = Dict(k => v for (v,k) in enumerate(rinds))
+
     # Inflate the output
-    new_inds = [(axid in linds ? left.indices[indexin(axid, linds)[]] : (:)) for axid in tinds]
-    new_shape = Tuple(
-        axid in linds ? size(left, indexin(axid, linds)[]) : size(right, indexin(axid, rinds)[])
-        for axid in tinds
-    )
-    Inflate(new_contraction, new_shape, new_inds...)
+    new_inds = IndexMap((k => left.map[lmap[k]] for k in tinds if k in keys(lmap))...)
+    new_shape = Tuple(axid in keys(lmap) ? size(left, lmap[axid]) : size(right, rmap[axid]) for axid in tinds)
+    Inflate(new_contraction, new_shape, new_inds)
 end
 
 
 
 # GetIndex
 
-function Base.getindex(self::ArrayEvaluable, indices...)
-    cleaned_indices = Index[isa(ix, Colon) ? ix : asarray(ix) for ix in indices]
-    GetIndex(self, cleaned_indices)
-end
+Base.getindex(self::ArrayEvaluable, indices...) = GetIndex(self, IndexMap(indices...))
 
 function Base.getindex(self::Constant, indices...)
-    cleaned_indices = Index[isa(ix, Colon) ? ix : asarray(ix) for ix in indices]
-    if all(isa(ix, Colon) || isa(ix, Constant) for ix in cleaned_indices)
-        Constant(self.value[(isa(i, Colon) ? i : i.value for i in cleaned_indices)...])
+    indices = Index[isa(ix, Colon) ? ix : asarray(ix) for ix in indices]
+    if all(isa(ix, Colon) || isa(ix, Constant) for ix in indices)
+        Constant(self.value[(isa(i, Colon) ? i : i.value for i in indices)...])
     else
-        GetIndex(self, cleaned_indices)
+        GetIndex(self, IndexMap(indices...))
     end
 end
 
 # Ensure that Inflate commutes past GetIndex
 function Base.getindex(self::Inflate, indices...)
-    indices = Index[isa(ix, Colon) ? ix : asarray(ix) for ix in indices]
+    map = IndexMap(indices...)
+    @assert isempty(keys(self.map) ∩ keys(map))
+    @assert dimcheck(map, 0, 1)
 
-    @assert all(isa(x, Colon) || isa(y, Colon) for (x, y) in zip(self.indices, indices))
-    @assert index_dimcheck(indices, 0, 1)
-
-    new_iix, new_gix, new_shape = Vector{Index}(), Vector{Index}(), Vector{Int}()
-    for (gix, iix, shp) in zip(indices, self.indices, size(self))
-        if isa(gix, Colon) && isa(iix, Colon)
-            push!(new_iix, :)
-            push!(new_gix, :)
-            push!(new_shape, shp)
-        elseif isa(gix, Colon) && ndims(iix) == 1
-            push!(new_iix, iix)
-            push!(new_gix, :)
-            push!(new_shape, shp)
-        elseif ndims(gix) == 0 && isa(iix, Colon)
-            push!(new_gix, gix)
-        elseif ndims(gix) == 1 && isa(iix, Colon)
-            push!(new_iix, :)
-            push!(new_gix, gix)
-            push!(new_shape, size(gix, 1))
-        else
-            @assert false
+    new_inflatemap = Pair[]
+    new_shape = Int[]
+    skipped_axes = 0
+    for i in 1:ndims(self)
+        i ∉ keys(self.map) && i ∉ keys(map) && (push!(new_shape, size(self, i)); continue)
+        if i in keys(self.map)
+            push!(new_inflatemap, (i - skipped_axes) => self.map[i])
+            push!(new_shape, size(self, i))
+        elseif ndims(map, i) == 1
+            push!(new_shape, size(map, i, 1))
+        elseif ndims(map, i) == 0
+            skipped_axes += 1
         end
     end
 
-    new_data = all(isa(gix, Colon) for gix in new_gix) ? self.data : getindex(self.data, new_gix...)
-    Inflate(new_data, Tuple(new_shape), new_iix)
+    new_data = isempty(map) ? self.data : map[self.data]
+    Inflate(new_data, Tuple(new_shape), IndexMap(new_inflatemap...))
 end
 
 
 
 # Inflate
 
-Inflate(source::ArrayEvaluable, shape::Shape, indices::Vector{Index}) = Inflate(source, shape, Tuple(indices))
-Inflate(source::ArrayEvaluable, shape::Shape, indices...) = Inflate(source, shape, indices)
+Inflate(source::ArrayEvaluable, shape::Shape, indices::Vector{Index}) = Inflate(source, shape, IndexMap(indices...))
+Inflate(source::ArrayEvaluable, shape::Shape, indices...) = Inflate(source, shape, IndexMap(indices...))
 
 
 
@@ -125,8 +116,7 @@ end
 function InsertAxis(self::Inflate, axes::Vector{Int})
     isempty(axes) && return self
     newdata = InsertAxis(self.data, axes)
-    newindices = collect(Index, self.indices)
-    insertmany!(newindices, axes, :)
+    newindices = IndexMap((k + sum(axes .<= k) => v for (k, v) in self.map)...)
     newshape = collect(Int, size(self))
     insertmany!(newshape, axes, 1)
     Inflate(newdata, Tuple(newshape), newindices)
@@ -197,7 +187,7 @@ end
 
 grad(self::Constant, d::Int) = Zeros(eltype(self), size(self)..., d)
 grad(self::GetIndex, d::Int) = getindex(grad(self.value, d), self.indices..., :)
-grad(self::Inflate, d::Int) = Inflate(grad(self.data, d), (size(self)..., d), (self.indices..., :))
+grad(self::Inflate, d::Int) = Inflate(grad(self.data, d), (size(self)..., d), self.map)
 grad(self::InsertAxis, d::Int) = InsertAxis(grad(self.source, d), self.axes)
 grad(self::Inv, d::Int) = -Contract(self, self * grad(self.source, d), 2; fromright=true)
 grad(self::Neg, d::Int) = -grad(self.source, d)
@@ -220,15 +210,13 @@ Product(left::Zeros, right::ArrayEvaluable) = Product(right, left)
 
 # Ensure that Inflate commutes past Product
 function Product(left::Inflate, right::Inflate)
-    any(!isa(l, Colon) && !isa(r, Colon) for (l,r) in zip(left.indices, right.indices)) &&
-        error("Joining inflations with overlapping axes not supported")
-    ndims(left) == ndims(right) ||
-        error("Joining inflations with different number of dimensions not supported")
+    isempty(keys(left.map) ∩ keys(right.map)) || error("Joining inflations with overlapping axes not supported")
+    ndims(left) == ndims(right) || error("Joining inflations with different number of dimensions not supported")
 
     newdata = left.data .* right.data
-    newindices = Index[isa(l, Colon) ? r : l for (l,r) in zip(left.indices, right.indices)]
+    newmap = IndexMap(left.map..., right.map...)
     newshape = broadcast_shape(size(left), size(right))
-    Inflate(newdata, newshape, newindices)
+    Inflate(newdata, newshape, newmap)
 end
 
 Broadcast.broadcasted(::typeof(*), left::ArrayEvaluable, right::ArrayEvaluable) = Product(left, right)

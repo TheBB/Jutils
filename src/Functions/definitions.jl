@@ -137,40 +137,22 @@ end
 @autohasheq struct GetIndex{T,N} <: ArrayEvaluable{T,N}
     value :: ArrayEvaluable
     indices :: Indices
+    map :: IndexMap
 
-    function GetIndex(value::ArrayEvaluable{T,N}, indices::Indices) where {T,N}
-        length(indices) == ndims(value) || error("Inconsistent indexing")
-        index_dimcheck(indices, 0, 1) || error("Multidimensional indices not supported for getindex")
-
-        # Attempt type inference. TODO: Make this more robust
-        indextypes = [isa(i, Evaluable) ? restype(i) : typeof(i) for i in indices]
-        (_, rtype) = code_typed(getindex, (Array{T,N}, indextypes...))[end]
-
-        rtype <: Array || error("Result of indexing must be an array")
-        rtype.isconcretetype || error("Result of indexing is not a concrete type")
-        (RT, RN) = rtype.parameters
-        new{RT,RN}(value, indices)
+    function GetIndex(value::ArrayEvaluable{T,N}, map::IndexMap) where {T,N}
+        dimcheck(map, 0, 1) || error("Multidimensional indices not yet supported")
+        indices = Index[get(map, i, :) for i in 1:ndims(value)]
+        newdims = resultndims(map, ndims(value))
+        new{T,newdims}(value, indices, map)
     end
 end
 
-arguments(self::GetIndex) = (self.value, (i for i in self.indices if isa(i, Evaluable))...)
-Base.size(self::GetIndex) = index_resultsize(size(self.value), self.indices)
+Base.size(self::GetIndex) = resultsize(self.map, size(self.value))
+
+arguments(self::GetIndex) = (self.value, values(self.map)...)
 prealloc(self::GetIndex) = []
-
-function codegen(self::GetIndex, value, varindices...)
-    weaved = []
-    varindices = collect(varindices)
-    for s in self.indices
-        if isa(s, Colon)
-            push!(weaved, :(:))
-        elseif isa(s, Int) || isa(s, Array{Int})
-            push!(weaved, :($s))
-        else
-            push!(weaved, popfirst!(varindices))
-        end
-    end
-    :(view($value, $(weaved...)))
-end
+codegen(self::GetIndex, value, varindices...) =
+    :(view($value, $(codegen(self.map, varindices, ndims(self.value))...)))
 
 
 
@@ -178,29 +160,30 @@ end
 
 @autohasheq struct Inflate{T,N} <: ArrayEvaluable{T,N}
     data :: ArrayEvaluable{T}
-    indices :: Indices
     shape :: Shape
+    map :: IndexMap
 
-    function Inflate(data::ArrayEvaluable, shape::Shape, indices::Tuple)
-        indices = Index[isa(ix, Colon) ? ix : asarray(ix) for ix in indices]
-        length(indices) == length(shape) || error("Inconsistent indexing")
-        index_resultsize(shape, indices) == size(data) || error("Inconsistent dimensions")
-        index_dimcheck(indices, 1, 1) || error("Multidimensional indices not supported for inflate")
-        new{eltype(data), length(shape)}(data, indices, shape)
+    function Inflate(data::ArrayEvaluable, shape::Shape, map::IndexMap)
+        ndims(data) == length(shape) || error("Dimension mismatch")
+        resultsize(map, shape) == size(data) || error("Size mismatch")
+        dimcheck(map, 1, 1) || error("Only linear indices supported in inflation")
+        new{eltype(data), length(shape)}(data, shape, map)
     end
 end
 
-arguments(self::Inflate) = (self.data, (i for i in self.indices if isa(i, Evaluable))...)
+Inflate(data::ArrayEvaluable, shape::Shape, indices::Pair...) = Inflate(data, shape, IndexMap(indices...))
+
 Base.size(self::Inflate) = self.shape
 separate(self::Inflate) = [
-    (Tupl((isa(ix, Colon) ? ind : getindex(ix, ind)) for (ix, ind) in zip(self.indices, inds)), data)
+    (Tupl((axis in keys(self.map) ? getindex(self.map[axis], ind) : ind)  for (axis, ind) in enumerate(inds)), data)
     for (inds, data) in separate(self.data)
 ]
-prealloc(self::Inflate{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
+arguments(self::Inflate) = (self.data, values(self.map)...)
+prealloc(self::Inflate{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 function codegen(self::Inflate{T}, data, indices...) where T
     target, varindices = indices[end], collect(indices[1:end-1])
-    weaved = index_weave(self.indices, varindices)
+    weaved = codegen(self.map, varindices, ndims(self))
     quote
         $target[:] .= $(zero(T))
         $target[$(weaved...)] = $data

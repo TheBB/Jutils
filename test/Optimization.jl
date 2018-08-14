@@ -4,13 +4,13 @@
 end
 
 @testset "GetIndex(Inflate)" begin
-    func = Inflate(Constant([1.0, 2.0, 3.0]), (5,), [1, 2, 3])[:]
+    func = Inflate(Constant([1.0, 2.0, 3.0]), (5,), 1 => [1, 2, 3])[:]
     @test typetree(func) == [:Inflate, [:Constant], [:Constant]]
 
-    func = Inflate(Constant([1.0, 2.0, 3.0]), (3,), :)[:]
+    func = Inflate(Constant([1.0, 2.0, 3.0]), (3,))[:]
     @test typetree(func) == [:Inflate, [:Constant]]
 
-    func = Inflate(Constant([1.0, 2.0, 3.0]), (3,), :)[1]
+    func = Inflate(Constant([1.0, 2.0, 3.0]), (3,))[1]
     @test typetree(func) == [:Inflate, [:Constant]]
 end
 

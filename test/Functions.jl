@@ -82,11 +82,11 @@ end
 
     data = Constant([1.0, 2.0, 3.0, 4.0])
     index1 = Constant([1, 2, 3, 4])
-    func = compile(Inflate(data, (4,), index1))
+    func = compile(Inflate(data, (4,), 1 => index1))
     val = ev(func, [0.1], lineelt)
     @test val == [1.0, 2.0, 3.0, 4.0]
 
-    func = compile(Inflate(data, (7,), index1))
+    func = compile(Inflate(data, (7,), 1 => index1))
     val = ev(func, [0.1], lineelt)
     @test val == [1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0]
 end
