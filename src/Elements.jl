@@ -28,8 +28,12 @@ Base.ndims(self::Tensor) = sum(ndims(term) for term in self.terms)
 struct Element
     reference :: ReferenceElement
     index :: Int
+    dimcorr :: TransformChain
     transform :: TransformChain
 end
+
+Element(ref::ReferenceElement, index::Int; transform::TransformChain=(), dimcorr::TransformChain=()) =
+    Element(ref, index, dimcorr, transform)
 
 Base.ndims(self::Element) = ndims(self.reference)
 

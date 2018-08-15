@@ -7,7 +7,7 @@
     val = ev(func, [0.5], lineelt)
     @test val == ()
 
-    val = ev(func, [0.5], Element(Simplex{1}(), 1, (Shift([1.0]),)))
+    val = ev(func, [0.5], Element(Simplex{1}(), 1; transform=(Shift([1.0]),)))
     @test val == (Shift([1.0]),)
 end
 
@@ -17,7 +17,7 @@ end
     val = ev(func, [0.5], lineelt)
     @test val == [0.5]
 
-    val = ev(func, [0.7], Element(Simplex{1}(), 1, (Shift([-0.3]),)))
+    val = ev(func, [0.7], Element(Simplex{1}(), 1; transform=(Shift([-0.3]),)))
     @test val ≈ [0.4]
 end
 
