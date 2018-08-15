@@ -4,7 +4,7 @@ using AutoHashEquals
 using LinearAlgebra
 
 export applytrans, applytrans_grad
-export Shift
+export Shift, Updim
 
 
 abstract type AbstractTransform end
@@ -20,6 +20,20 @@ fromdims(self::Shift) = length(self.offset)
 todims(self::Shift) = length(self.offset)
 codegen(::Type{Shift}, transform::Expr, points::Symbol) = :($points .+ $transform.offset)
 codegen_grad(::Type{Shift}, ::Expr, ::Symbol, jac::Symbol) = jac
+
+
+@auto_hash_equals struct Updim{N,D} <: AbstractTransform
+    value :: Float64
+end
+
+fromdims(self::Updim{N}) where N = N
+todims(self::Updim{N}) where N = N + 1
+
+function codegen(::Type{Updim{N,D}}, transform::Expr, points::Symbol) where {N,D}
+    exprs = [:($points[$i]) for i in 1:N]
+    insert!(exprs, D, :($transform.value))
+    :([$(exprs...)])
+end
 
 
 @generated function applytrans(points::Array{Float64}, transforms::TransformChain)
