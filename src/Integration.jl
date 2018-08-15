@@ -10,7 +10,7 @@ export integrate
 
 
 function integrate(func::CompiledArray{T}, domain::Topology, npts::Int) where T
-    quadrules = Dict{ReferenceElement, Tuple{Vector{Float64}, Vector{Float64}}}(
+    quadrules = Dict{ReferenceElement, Tuple{Array{Float64,2}, Vector{Float64}}}(
         elem => quadrule(elem, npts) for elem in refelems(domain)
     )
 
@@ -19,7 +19,7 @@ function integrate(func::CompiledArray{T}, domain::Topology, npts::Int) where T
     for elem in domain
         (pts, wts) = quadrules[elem.reference]
         for i = 1:length(wts)
-            result .+= kernel([pts[i]], elem) .* wts[i]
+            result .+= kernel(pts[i,:], elem) .* wts[i]
         end
     end
 
@@ -27,7 +27,7 @@ function integrate(func::CompiledArray{T}, domain::Topology, npts::Int) where T
 end
 
 function integrate(func::CompiledSparseArray{T,2}, domain::Topology, npts::Int) where T
-    quadrules = Dict{ReferenceElement, Tuple{Vector{Float64}, Vector{Float64}}}(
+    quadrules = Dict{ReferenceElement, Tuple{Array{Float64,2}, Vector{Float64}}}(
         elem => quadrule(elem, npts) for elem in refelems(domain)
     )
 
@@ -44,12 +44,12 @@ function integrate(func::CompiledSparseArray{T,2}, domain::Topology, npts::Int) 
         (pts, wts) = quadrules[elem.reference]
 
         # TODO: This can surely be done better
-        blockI, blockJ = ikernel([pts[1]], elem)
+        blockI, blockJ = ikernel(pts[1,:], elem)
         I[:, elemid] = Int[i for (i, _) in Iterators.product(blockI, blockJ)][:]
         J[:, elemid] = Int[j for (_, j) in Iterators.product(blockI, blockJ)][:]
 
         for i = 1:length(wts)
-            data = dkernel([pts[i]], elem)
+            data = dkernel(pts[i,:], elem)
             V[:, elemid] += data[:] .* wts[i]
         end
     end

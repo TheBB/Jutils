@@ -12,9 +12,12 @@ abstract type ReferenceElement end
 struct Simplex{NDim} <: ReferenceElement end
 
 Base.ndims(::Simplex{n}) where n = n
+
+quadrule(::Simplex{0}, npts::Int) = zeros(Float64, 1, 0), [1.0]
+
 function quadrule(::Simplex{1}, npts::Int)
     (pts, wts) = gausslegendre(npts)
-    (pts .+ 1.0)/2, wts/2
+    (reshape(pts, (npts, 1)) .+ 1.0)/2, wts/2
 end
 
 
