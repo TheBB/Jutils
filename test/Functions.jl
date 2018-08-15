@@ -3,16 +3,37 @@
 # constructors which may potentially optimize out some of the complexity.
 
 @testset "Argument" begin
-    func = compile(trans)
+    func = compile(fulltrans)
+
     val = ev(func, [0.5], lineelt)
     @test val == ()
 
     val = ev(func, [0.5], Element(Simplex{1}(), 1; transform=(Shift([1.0]),)))
     @test val == (Shift([1.0]),)
+
+    val = ev(func, [0.5], Element(Simplex{1}(), 1; dimcorr=(Updim{1,1}(2.4),)))
+    @test val == (Updim{1,1}(2.4),)
+
+    val = ev(func, [0.5], Element(Simplex{1}(), 1; dimcorr=(Updim{1,1}(2.4),), transform=(Shift([1.0]),)))
+    @test val == (Updim{1,1}(2.4), Shift([1.0]))
+
+    func = compile(dimtrans)
+
+    val = ev(func, [0.5], lineelt)
+    @test val == ()
+
+    val = ev(func, [0.5], Element(Simplex{1}(), 1; transform=(Shift([1.0]),)))
+    @test val == ()
+
+    val = ev(func, [0.5], Element(Simplex{1}(), 1; dimcorr=(Updim{1,1}(2.4),)))
+    @test val == (Updim{1,1}(2.4),)
+
+    val = ev(func, [0.5], Element(Simplex{1}(), 1; dimcorr=(Updim{1,1}(2.4),), transform=(Shift([1.0]),)))
+    @test val == (Updim{1,1}(2.4),)
 end
 
 @testset "ApplyTransform" begin
-    func = compile(ApplyTransform(trans, Point(1), 1))
+    func = compile(ApplyTransform(fulltrans, Point(1), 1))
 
     val = ev(func, [0.5], lineelt)
     @test val == [0.5]
@@ -22,7 +43,7 @@ end
 end
 
 @testset "ApplyTransformGrad" begin
-    func = compile(ApplyTransformGrad(trans, Point(1), 1))
+    func = compile(ApplyTransformGrad(fulltrans, Point(1), 1))
     val = ev(func, [0.5], lineelt)
     @test val == fill(1.0, (1,1))
 end

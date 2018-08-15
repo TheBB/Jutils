@@ -1,5 +1,5 @@
 @testset "ApplyTransform" begin
-    func = compile(grad(ApplyTransform(trans, Point(2), 2), 2))
+    func = compile(grad(ApplyTransform(fulltrans, Point(2), 2), 2))
     val = ev(func, [0.0, 0.0], squareelt)
     @test val == Matrix(1.0I, 2, 2)
 end

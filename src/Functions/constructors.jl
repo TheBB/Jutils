@@ -252,8 +252,9 @@ Broadcast.broadcasted(::typeof(-), self::ArrayEvaluable) = Neg(self)
 
 const element = Argument{Element}(:element, false, true)
 const elemindex = ArrayArgument{Int,0}(:(fill(element.index, ())), false, true, ())
-const trans = Argument{TransformChain}(:(element.transform), false, true)
+const dimtrans = Argument{TransformChain}(:(element.dimcorr), false, true)
+const fulltrans = Argument{TransformChain}(:((element.dimcorr..., element.transform...)), false, true)
 
 outer(left::ArrayEvaluable, right::ArrayEvaluable) = InsertAxis(left, 1) .* InsertAxis(right, 2)
 outer(self::ArrayEvaluable) = outer(self, self)
-rootcoords(ndims::Int) = ApplyTransform(trans, Point(ndims), ndims)
+rootcoords(ndims::Int) = ApplyTransform(fulltrans, Point(ndims), ndims)
