@@ -4,7 +4,7 @@ import SparseArrays: sparse
 
 import ..Elements: ReferenceElement, quadrule
 import ..Functions: callable, CompiledArray, CompiledSparseArray
-import ..Topologies: Topology, Line, refelems
+import ..Topologies: Topology, refelems
 
 export integrate
 

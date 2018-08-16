@@ -4,6 +4,7 @@ using AutoHashEquals
 using LinearAlgebra
 
 export applytrans, applytrans_grad
+export AbstractTransform
 export Shift, Updim
 
 
