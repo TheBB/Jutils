@@ -33,7 +33,7 @@
 end
 
 @testset "ApplyTransform" begin
-    func = compile(ApplyTransform(fulltrans, Point(1), 1))
+    func = compile(rootcoords(1))
 
     val = ev(func, [0.5], lineelt)
     @test val == [0.5]
@@ -43,7 +43,7 @@ end
 end
 
 @testset "ApplyTransformGrad" begin
-    func = compile(ApplyTransformGrad(fulltrans, Point(1), 1))
+    func = compile(ApplyTransformGrad(fulltrans, Functions._point, 1))
     val = ev(func, [0.5], lineelt)
     @test val == fill(1.0, (1,1))
 end

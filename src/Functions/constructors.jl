@@ -146,11 +146,6 @@ function grad(self::ApplyTransform, d::Int)
     ApplyTransformGrad(self.trans, self.arg, self.dims)
 end
 
-function grad(self::Point, d::Int)
-    self.ndims == d || error("Inconsistent number of dimensions")
-    Constant(Matrix(1.0I, d, d))
-end
-
 function grad(self::Contract, d::Int)
     newsym = gensym("temp")
     lgrad = Contract(grad(self.left, d), self.right, [self.linds..., newsym], self.rinds, [self.tinds..., newsym])
@@ -254,7 +249,9 @@ const element = Argument{Element}(:element, false, true)
 const elemindex = ArrayArgument{Int,0}(:(fill(element.index, ())), false, true, ())
 const dimtrans = Argument{TransformChain}(:(element.dimcorr), false, true)
 const fulltrans = Argument{TransformChain}(:((element.dimcorr..., element.transform...)), false, true)
+const _point = Argument{Vector{Float64}}(:point, false, false)
+point(n::Int) = ApplyTransform(dimtrans, _point, n)
 
 outer(left::ArrayEvaluable, right::ArrayEvaluable) = InsertAxis(left, 1) .* InsertAxis(right, 2)
 outer(self::ArrayEvaluable) = outer(self, self)
-rootcoords(ndims::Int) = ApplyTransform(fulltrans, Point(ndims), ndims)
+rootcoords(ndims::Int) = ApplyTransform(fulltrans, _point, ndims)

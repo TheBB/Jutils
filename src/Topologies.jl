@@ -32,8 +32,7 @@ function mkbasis(self::Line, ::Type{Lagrange}, degree::Int)
     ndofs = self.nelems * degree + 1
     dofmap = getindex(Constant(dofs), :, elemindex)
 
-    point = ApplyTransform(dimtrans, Point(1), 1)
-    poly = Monomials(getindex(point, 1), degree)
+    poly = Monomials(getindex(point(1), 1), degree)
     coeffs = hcat((
         [binomial(degree,nu) * binomial(degree-nu,k-nu) * (isodd(k-nu) ? -1 : 1) for nu in 0:degree]
         for k in 0:degree

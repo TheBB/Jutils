@@ -31,26 +31,11 @@ codegen(self::ArrayArgument) = self.expression
 
 
 
-# Quadrature point (reference coordinates)
-
-@autohasheq struct Point <: ArrayEvaluable{Float64,1}
-    ndims :: Int
-end
-
-arguments(self::Point) = ()
-isconstant(::Point) = false
-iselconstant(::Point) = false
-Base.size(self::Point) = (self.ndims,)
-prealloc(::Point) = []
-codegen(self::Point) = :point
-
-
-
 # ApplyTransform
 
 @autohasheq struct ApplyTransform <: ArrayEvaluable{Float64,1}
     trans :: Evaluable{TransformChain}
-    arg :: ArrayEvaluable{Float64,1}
+    arg :: Evaluable{Vector{Float64}}
     dims :: Int
 end
 
@@ -65,7 +50,7 @@ codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $trans))
 
 @autohasheq struct ApplyTransformGrad <: ArrayEvaluable{Float64,2}
     trans :: Evaluable{TransformChain}
-    arg :: ArrayEvaluable{Float64,1}
+    arg :: Evaluable{Vector{Float64}}
     dims :: Int
 end
 

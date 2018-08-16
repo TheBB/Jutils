@@ -19,10 +19,10 @@ export Shape, Index, Indices
 export ApplyTransform, ApplyTransformGrad
 export Constant, Contract, GetIndex
 export Inflate, InsertAxis, Inv
-export Monomials, Neg, Outer, Point, Product, Reshape, Sum, Tupl, Zeros
+export Monomials, Neg, Outer, Product, Reshape, Sum, Tupl, Zeros
 
 # Constructor exports
-export dimtrans, fulltrans
+export dimtrans, fulltrans, rawpoint, point
 export grad, elemindex, rootcoords, outer
 
 
