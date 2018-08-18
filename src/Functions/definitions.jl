@@ -135,9 +135,16 @@ end
 Base.size(self::GetIndex) = resultsize(self.map, size(self.value))
 
 arguments(self::GetIndex) = (self.value, values(self.map)...)
-prealloc(self::GetIndex) = []
-codegen(self::GetIndex, value, varindices...) =
-    :(view($value, $(codegen(self.map, varindices, ndims(self.value))...)))
+prealloc(self::GetIndex{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+
+function codegen(self::GetIndex, value, varindices...)
+    target = varindices[end]
+    varindices = varindices[1:end-1]
+    quote
+        $target .= $value[$(codegen(self.map, varindices, ndims(self.value))...)]
+        $target
+    end
+end
 
 
 
@@ -333,8 +340,8 @@ end
 Base.size(self::Reshape) = self.newshape
 
 arguments(self::Reshape) = (self.source,)
-prealloc(::Reshape) = []
-codegen(self::Reshape, source) = :(reshape($source, $(self.newshape...)))
+prealloc(::Reshape{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+codegen(self::Reshape, source, target) = :($target[:] = $source[:]; $target)
 
 
 
