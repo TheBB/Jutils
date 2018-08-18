@@ -186,7 +186,17 @@ grad(self::Inflate, d::Int) = Inflate(grad(self.data, d), (size(self)..., d), se
 grad(self::InsertAxis, d::Int) = InsertAxis(grad(self.source, d), self.axes)
 grad(self::Inv, d::Int) = -Contract(self, self * grad(self.source, d), 2; fromright=true)
 grad(self::Neg, d::Int) = -grad(self.source, d)
+grad(self::Reshape, d::Int) = reshape(grad(self.source, d), self.newshape..., d)
 grad(self::Zeros, d::Int) = Zeros(eltype(self), size(self)..., d)
+
+
+
+# Reshape
+
+function Base.reshape(self::ArrayEvaluable, newshape::Int...)
+    newshape == size(self) && return self
+    Reshape(self, newshape)
+end
 
 
 
@@ -214,6 +224,7 @@ function Product(left::Inflate, right::Inflate)
     Inflate(newdata, newshape, newmap)
 end
 
+Broadcast.broadcasted(::typeof(*), left::ArrayEvaluable) = left
 Broadcast.broadcasted(::typeof(*), left::ArrayEvaluable, right::ArrayEvaluable) = Product(left, right)
 Broadcast.broadcasted(::typeof(*), left::ArrayEvaluable, right) = Product(left, asarray(right))
 Broadcast.broadcasted(::typeof(*), left, right::ArrayEvaluable) = Product(asarray(left), right)
@@ -232,6 +243,7 @@ function Sum(left::ArrayEvaluable, right::Zeros)
 end
 Sum(left::Zeros, right::ArrayEvaluable) = Sum(right, left)
 
+Broadcast.broadcasted(::typeof(+), left::ArrayEvaluable) = left
 Broadcast.broadcasted(::typeof(+), left::ArrayEvaluable, right::ArrayEvaluable) = Sum(left, right)
 Broadcast.broadcasted(::typeof(+), left::ArrayEvaluable, right) = Sum(left, asarray(right))
 Broadcast.broadcasted(::typeof(+), left, right::ArrayEvaluable) = Sum(asarray(left), right)

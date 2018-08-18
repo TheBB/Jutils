@@ -73,6 +73,7 @@ asarray(v::ArrayEvaluable) = v
 asarray(v::Real) = Constant(v)
 asarray(v::AbstractArray) = Constant(v)
 
+Base.length(self::ArrayEvaluable) = prod(size(self))
 Base.ndims(self::ArrayEvaluable{T,N}) where {T,N} = N :: Int
 Base.size(self::ArrayEvaluable, dim::Int) = size(self)[dim]
 Base.show(io::IO, self::ArrayEvaluable) = print(io, string(typeof(self).name.name), size(self))

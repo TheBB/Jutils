@@ -318,6 +318,26 @@ end
 
 
 
+# Reshape
+
+@autohasheq struct Reshape{T,N} <: ArrayEvaluable{T,N}
+    source :: ArrayEvaluable{T}
+    newshape :: Shape
+
+    function Reshape(source::ArrayEvaluable, newshape::Shape)
+        @assert prod(newshape) == length(source)
+        new{eltype(source), length(newshape)}(source, newshape)
+    end
+end
+
+Base.size(self::Reshape) = self.newshape
+
+arguments(self::Reshape) = (self.source,)
+prealloc(::Reshape) = []
+codegen(self::Reshape, source) = :(reshape($source, $(self.newshape...)))
+
+
+
 # Sum
 
 @autohasheq struct Sum{T,N} <: ArrayEvaluable{T,N}
