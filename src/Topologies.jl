@@ -53,19 +53,30 @@ end
 
 refelems(::StructuredTopology{N}) where N = (Simplex{N}(),)
 
-function mkbasis(self::StructuredTopology{1}, ::Type{Lagrange}, degree::Int)
-    nelems = length(self)
-    dofs = 1 .+ cat((range(elemid*degree, length=degree+1) for elemid in range(0, length=nelems))..., dims=2)
-    ndofs = nelems * degree + 1
-    dofmap = getindex(Constant(dofs), :, elemindex)
-
-    poly = Monomials(getindex(point(1), 1), degree)
+function mkbasis(self::StructuredTopology{N}, ::Type{Lagrange}, degree::Int) where N
+    # Generate N single-dimensional Lagrangian bases of the right degree
+    poly = Monomials(point(N), degree)
     coeffs = hcat((
         [binomial(degree,nu) * binomial(degree-nu,k-nu) * (isodd(k-nu) ? -1 : 1) for nu in 0:degree]
         for k in 0:degree
     )...)
+    basis1d = Contract(Constant(coeffs), poly)
 
-    Inflate(Contract(Constant(coeffs), poly), (ndofs,), dofmap)
+    # Formulate the tensor product
+    factors = [InsertAxis(basis1d[:, k], [fill(1, k-1); fill(2, N-k)]) for k in 1:N]
+    basisNd = .*(factors...)
+
+    # Number the DoFs
+    ndofs = [n*degree+1 for n in size(self.elemids)]
+    dofgrid = reshape(1:prod(ndofs), ndofs...)
+    elemwindows = [1+(k-1)*degree:1+k*degree for k in 1:maximum(ndofs)]
+    dofmap = Array{Int,2}(undef, (degree+1)^N, length(self.elemids))
+    for (i, windows) in enumerate(Iterators.product([elemwindows[1:n] for n in size(self.elemids)]...))
+        dofmap[:,i] = dofgrid[windows...][:]
+    end
+
+    # Return inflation
+    Inflate(reshape(basisNd, (degree+1)^N), (prod(ndofs),), Constant(dofmap)[:, elemindex])
 end
 
 end # module
