@@ -116,6 +116,26 @@ end
 
 
 
+# DropDims
+
+@autohasheq struct DropDims{T,N} <: ArrayEvaluable{T,N}
+    source :: ArrayEvaluable
+    dims :: Tuple{Vararg{Int}}
+
+    function DropDims(source::ArrayEvaluable, dims::Tuple{Vararg{Int}})
+        @assert all(size(source, d) == 1 for d in dims)
+        new{eltype(source), ndims(source)-length(dims)}(source, dims)
+    end
+end
+
+Base.size(self::DropDims) = Tuple(s for (i, s) in enumerate(size(self.source)) if i ∉ self.dims)
+
+arguments(self::DropDims) = (self.source,)
+prealloc(self::DropDims{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+codegen(self::DropDims, source, target) = :($target .= dropdims($source, dims=$(self.dims)); $target)
+
+
+
 # GetIndex
 # TODO: More general indexing expressions?
 
@@ -340,8 +360,28 @@ end
 Base.size(self::Reshape) = self.newshape
 
 arguments(self::Reshape) = (self.source,)
-prealloc(::Reshape{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+prealloc(self::Reshape{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 codegen(self::Reshape, source, target) = :($target[:] = $source[:]; $target)
+
+
+
+# Sum
+
+@autohasheq struct Sum{T,N} <: ArrayEvaluable{T,N}
+    source :: ArrayEvaluable{T}
+    dims :: Tuple{Vararg{Int}}
+
+    function Sum(source::ArrayEvaluable, dims::Tuple{Vararg{Int}})
+        @assert all(1 <= d <= ndims(source) for d in dims)
+        new{eltype(source), ndims(source)}(source, dims)
+    end
+end
+
+Base.size(self::Sum) = Tuple(i in self.dims ? 1 : k for (i, k) in enumerate(size(self.source)))
+
+arguments(self::Sum) = (self.source,)
+prealloc(self::Sum{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+codegen(self::Sum, source, target) = :($target .= sum($source, dims=$(self.dims)))
 
 
 

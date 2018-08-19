@@ -255,6 +255,32 @@ Broadcast.broadcasted(::typeof(-), self::ArrayEvaluable) = Neg(self)
 
 
 
+# Dimension reduction
+
+Base.dropdims(self::ArrayEvaluable, dims) = DropDims(self, Tuple(dims))
+
+# Ensure that Inflate commutes past DropDims
+function Base.dropdims(self::Inflate, dims)
+    dims = collect(dims)
+    newdata = dropdims(self.data, dims)
+    newmap = IndexMap((k + sum(dims .< k) => v for (k, v) in self.map if k ∉ dims)...)
+    newshape = Tuple(k for (i, k) in enumerate(size(self)) if i ∉ dims)
+    Inflate(newdata, newshape, newmap)
+end
+
+Base.sum(self::ArrayEvaluable, dims) = Sum(self, Tuple(dims))
+
+# Ensure that Inflate commutes past Sum
+function Base.sum(self::Inflate, dims)
+    dims = collect(dims)
+    newdata = sum(self.data, dims)
+    newmap = IndexMap((k => v for (k, v) in self.map if k ∉ dims)...)
+    newshape = Tuple(i in dims ? 1 : k for (i, k) in enumerate(size(self)))
+    Inflate(newdata, newshape, newmap)
+end
+
+
+
 # Miscellaneous
 
 const element = Argument{Element}(:element, false, true)
