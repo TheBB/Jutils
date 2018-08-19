@@ -61,7 +61,7 @@ end
     val = ev(func, [0.2], lineelt)
     @test val == [1.0, 2.0, 3.0]
 
-    func = Sum((Constant([0.0]), Constant([0.0])))
+    func = Add((Constant([0.0]), Constant([0.0])))
     @test length(Functions.linearize(func)) == 2
 end
 
@@ -191,11 +191,11 @@ end
     @test val ≈ lmx .* rmx
 end
 
-@testset "Sum" begin
+@testset "Add" begin
     Random.seed!(2018)
     lmx = rand(Float64, 5)
     rmx = rand(Float64, 5, 9)
-    func = compile(Sum(Constant(lmx), Constant(rmx)))
+    func = compile(Add(Constant(lmx), Constant(rmx)))
     val = ev(func, [0.5], lineelt)
     @test val ≈ lmx .+ rmx
 end

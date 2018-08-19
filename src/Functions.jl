@@ -16,10 +16,10 @@ export CompiledArray, CompiledSparseArray, Compiled
 
 # Type exports
 export Shape, Index, Indices
-export ApplyTransform, ApplyTransformGrad
+export Add, ApplyTransform, ApplyTransformGrad
 export Constant, Contract, GetIndex
 export Inflate, InsertAxis, Inv
-export Monomials, Neg, Outer, Product, Reshape, Sum, Tupl, Zeros
+export Monomials, Neg, Outer, Product, Reshape, Tupl, Zeros
 
 # Constructor exports
 export dimtrans, fulltrans, rawpoint, point

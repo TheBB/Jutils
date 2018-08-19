@@ -56,7 +56,7 @@ end
 
 @testset "Inv" begin
     pt = point(2)
-    func = grad(inv(Sum(InsertAxis(pt, 1) .* InsertAxis(pt, 2), Constant(Matrix(1.0I, 2, 2)))), 2)
+    func = grad(inv(Add(InsertAxis(pt, 1) .* InsertAxis(pt, 2), Constant(Matrix(1.0I, 2, 2)))), 2)
     @test size(func) == (2, 2, 2)
     val = ev(compile(func), [0.2, 0.9], squareelt)
     det = 1 + 0.2^2 + 0.9^2
@@ -111,9 +111,9 @@ end
     @test val[:] == [0.4, 0.5, 0.5, 0.0, 0.0, 0.2, 0.2, 1.0]
 end
 
-@testset "Sum" begin
+@testset "Add" begin
     pt = point(2)
-    func = grad(Sum(InsertAxis(pt, [1]) .* InsertAxis(pt, [2]), Constant(Matrix(1.0I, 2, 2))), 2)
+    func = grad(Add(InsertAxis(pt, [1]) .* InsertAxis(pt, [2]), Constant(Matrix(1.0I, 2, 2))), 2)
     @test size(func) == (2, 2, 2)
     func = compile(func)
     val = ev(func, [0.0, 0.0], squareelt)

@@ -150,7 +150,7 @@ function grad(self::Contract, d::Int)
     newsym = gensym("temp")
     lgrad = Contract(grad(self.left, d), self.right, [self.linds..., newsym], self.rinds, [self.tinds..., newsym])
     rgrad = Contract(self.left, grad(self.right, d), self.linds, [self.rinds..., newsym], [self.tinds..., newsym])
-    Sum(lgrad, rgrad)
+    Add(lgrad, rgrad)
 end
 
 function grad(self::Monomials, d::Int)
@@ -174,7 +174,7 @@ function grad(self::Product, d::Int)
     ret
 end
 
-function grad(self::Sum, d::Int)
+function grad(self::Add, d::Int)
     # Since the gradient dimension comes last, we need to explicitly broadcast first
     maxndims = maximum(ndims(term) for term in self.terms)
     .+((grad(expandright(term, maxndims), d) for term in self.terms)...)
@@ -233,20 +233,20 @@ Broadcast.broadcasted(::typeof(*), left, right::ArrayEvaluable) = Product(asarra
 
 # Summation and negation
 
-Sum(left::ArrayEvaluable, right::ArrayEvaluable) = Sum((left, right))
-Sum(left::Constant, right::Constant) = Constant(left.value .+ right.value)
+Add(left::ArrayEvaluable, right::ArrayEvaluable) = Add((left, right))
+Add(left::Constant, right::Constant) = Constant(left.value .+ right.value)
 
 # TODO: Apply broadcasting during optimization phase?
-function Sum(left::ArrayEvaluable, right::Zeros)
-    any(s != 1 for s in size(right)[ndims(left)+1:end]) && return Sum((left, right))
+function Add(left::ArrayEvaluable, right::Zeros)
+    any(s != 1 for s in size(right)[ndims(left)+1:end]) && return Add((left, right))
     expandright(left, ndims(right))
 end
-Sum(left::Zeros, right::ArrayEvaluable) = Sum(right, left)
+Add(left::Zeros, right::ArrayEvaluable) = Add(right, left)
 
 Broadcast.broadcasted(::typeof(+), left::ArrayEvaluable) = left
-Broadcast.broadcasted(::typeof(+), left::ArrayEvaluable, right::ArrayEvaluable) = Sum(left, right)
-Broadcast.broadcasted(::typeof(+), left::ArrayEvaluable, right) = Sum(left, asarray(right))
-Broadcast.broadcasted(::typeof(+), left, right::ArrayEvaluable) = Sum(asarray(left), right)
+Broadcast.broadcasted(::typeof(+), left::ArrayEvaluable, right::ArrayEvaluable) = Add(left, right)
+Broadcast.broadcasted(::typeof(+), left::ArrayEvaluable, right) = Add(left, asarray(right))
+Broadcast.broadcasted(::typeof(+), left, right::ArrayEvaluable) = Add(asarray(left), right)
 
 Neg(self::Neg) = self.source
 

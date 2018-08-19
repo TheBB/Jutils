@@ -345,25 +345,25 @@ codegen(self::Reshape, source, target) = :($target[:] = $source[:]; $target)
 
 
 
-# Sum
+# Add
 
-@autohasheq struct Sum{T,N} <: ArrayEvaluable{T,N}
+@autohasheq struct Add{T,N} <: ArrayEvaluable{T,N}
     terms :: Tuple{Vararg{ArrayEvaluable}}
 
-    function Sum(terms::Tuple{Vararg{ArrayEvaluable}})
+    function Add(terms::Tuple{Vararg{ArrayEvaluable}})
         newshape = broadcast_shape((size(term) for term in terms)...)
         newtype = reduce(promote_type, (eltype(term) for term in terms))
         new{newtype, length(newshape)}(terms)
     end
 end
 
-Sum(terms...) = Sum(terms)
+Add(terms...) = Add(terms)
 
-arguments(self::Sum) = self.terms
-Base.size(self::Sum) = broadcast_shape((size(term) for term in self.terms)...)
-prealloc(self::Sum{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+arguments(self::Add) = self.terms
+Base.size(self::Add) = broadcast_shape((size(term) for term in self.terms)...)
+prealloc(self::Add{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
-function codegen(self::Sum, args...)
+function codegen(self::Add, args...)
     code = args[1]
     for arg in args[2:end-1]
         code = :($code .+ $arg)
