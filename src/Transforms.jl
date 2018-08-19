@@ -36,6 +36,14 @@ function codegen(::Type{Updim{N,D}}, transform::Expr, points::Symbol) where {N,D
     :([$(exprs...)])
 end
 
+function codegen_grad(::Type{Updim{1,D}}, transform::Expr, points::Symbol, jac::Symbol) where D
+    z = gensym()
+    quote
+        $z = [$jac[1:$(D-1),:]; zeros(1); $jac[$D:end,:]]
+        [$z[1,:] $z[2,1]; $z[2,:] -$z[1,1]]
+    end
+end
+
 
 @generated function applytrans(points::Array{Float64}, transforms::TransformChain)
     symbols = [gensym(string(index)) for index in 1:fieldcount(transforms)+1]
