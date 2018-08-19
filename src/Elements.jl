@@ -1,6 +1,8 @@
 module Elements
 
 using FastGaussQuadrature
+import Base.Iterators: product
+
 import ..Transforms: TransformChain
 
 export Simplex, Element, Tensor, quadrule
@@ -15,9 +17,14 @@ Base.ndims(::Simplex{n}) where n = n
 
 quadrule(::Simplex{0}, npts::Int) = zeros(Float64, 1, 0), [1.0]
 
-function quadrule(::Simplex{1}, npts::Int)
+function quadrule(::Simplex{N}, npts::Int) where N
     (pts, wts) = gausslegendre(npts)
-    (reshape(pts, (npts, 1)) .+ 1.0)/2, wts/2
+    pts = (pts .+ 1.0) ./ 2
+    wts = wts ./ 2
+
+    pts = hcat([collect(k) for k in product((pts for _ in 1:N)...)]...)
+    wts = .*((reshape(wts, fill(1, k)..., npts) for k in 0:N-1)...)
+    pts', vec(wts)
 end
 
 
