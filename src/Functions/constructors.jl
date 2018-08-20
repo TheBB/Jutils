@@ -1,40 +1,44 @@
 
 # Contraction
 
-function Contract(left::ArrayEvaluable, right::ArrayEvaluable, laxis::Int, raxis::Int)
-    (nl, nr) = ndims(left), ndims(right)
-    tinds = collect(Any, 1:nl+nr-2)
-    linds = collect(Any, 1:nl-1)
-    rinds = collect(Any, nl:nl+nr-2)
-    insert!(linds, laxis, :a)
-    insert!(rinds, raxis, :a)
-    Contract(left, right, linds, rinds, tinds)
+function Contract(left::ArrayEvaluable, right::ArrayEvaluable, linds::Vector{Int}, rinds::Vector{Int}, tinds::Vector{Int})
+    Contract(ArrayEvaluable[left, right], [linds, rinds], tinds)
 end
 
-function Contract(left::ArrayEvaluable, right::ArrayEvaluable, laxis::Symbol, raxis::Symbol)
-    Contract(left, right, laxis == :first ? 1 : ndims(left), raxis == :first ? 1 : ndims(right))
+function Contract(left::Contract, right::ArrayEvaluable, linds::Vector{Int}, rinds::Vector{Int}, tinds::Vector{Int})
+    rename = Dict{Int,Int}(zip(linds, left.target))
+    new = newindex(left) - 1
+
+    for ind in Iterators.flatten((rinds, tinds))
+        get!(rename, ind) do
+            new += 1
+        end
+    end
+
+    newindices = copy(left.indices)
+    push!(newindices, [rename[i] for i in rinds])
+    newterms = copy(left.terms)
+    push!(newterms, right)
+
+    Contract(newterms, newindices, [rename[i] for i in tinds])
 end
 
-Contract(left::ArrayEvaluable, right::ArrayEvaluable) = Contract(left, right, :last, :first)
+Contract(left::ArrayEvaluable, right::Contract, linds::Vector{Int}, rinds::Vector{Int}, tinds::Vector{Int}) =
+    Contract(right, left, rinds, linds, tinds)
 
-function Contract(left::ArrayEvaluable, right::ArrayEvaluable, onto::Int; fromright::Bool=false)
-    @assert ndims(left) == 2
-    tinds = collect(Any, 1:ndims(right))
-    rinds = collect(Any, 1:ndims(right))
-    rinds[onto] = :a
-    linds = fromright ? [:a, onto] : [onto, :a]
-    Contract(left, right, linds, rinds, tinds)
+function Contract(left::Zeros, right::ArrayEvaluable, linds::Vector{Int}, rinds::Vector{Int}, tinds::Vector{Int})
+    lmap = Dict(k => v for (v,k) in enumerate(linds))
+    rmap = Dict(k => v for (v,k) in enumerate(rinds))
+    new_shape = Tuple(axid in keys(lmap) ? size(left, lmap[axid]) : size(right, rmap[axid]) for axid in tinds)
+    new_type = promote_type(eltype(left), eltype(right))
+    Zeros(new_type, new_shape...)
 end
 
-Contract(left::ArrayEvaluable, right::ArrayEvaluable, onto::Symbol; fromright::Bool=false) =
-    Contract(left, right, onto == :first ? 1 : ndims(right); fromright=fromright)
-
-Base.:*(left::ArrayEvaluable, right::ArrayEvaluable) = Contract(left, right)
-Base.:*(left::ArrayEvaluable, right) = Contract(left, asarray(right))
-Base.:*(left, right::ArrayEvaluable) = Contract(asarray(left), right)
+Contract(left::ArrayEvaluable, right::Zeros, linds::Vector{Int}, rinds::Vector{Int}, tinds::Vector{Int}) =
+    Contract(right, left, rinds, linds, tinds)
 
 # Ensure that Inflate commutes past Contract
-function Contract(left::Inflate, right::ArrayEvaluable, linds::Vector, rinds::Vector, tinds::Vector)
+function Contract(left::Inflate, right::ArrayEvaluable, linds::Vector{Int}, rinds::Vector{Int}, tinds::Vector{Int})
     # Find the index expressions associated with the axes that are contracted over,
     # apply a corresponding getindex followed by a contraction
     contr_indices = Dict(axid => get(left.map, i, :) for (i, axid) in enumerate(linds))
@@ -50,6 +54,44 @@ function Contract(left::Inflate, right::ArrayEvaluable, linds::Vector, rinds::Ve
     new_shape = Tuple(axid in keys(lmap) ? size(left, lmap[axid]) : size(right, rmap[axid]) for axid in tinds)
     Inflate(new_contraction, new_shape, new_inds)
 end
+
+Contract(left::ArrayEvaluable, right::Inflate, linds::Vector{Int}, rinds::Vector{Int}, tinds::Vector{Int}) =
+    Contract(right, left, rinds, linds, tinds)
+
+
+
+# Convenience contraction constructors
+
+# Contract laxis and raxis, leaving other axes as before (left before right)
+function Contract(left::ArrayEvaluable, right::ArrayEvaluable, laxis::Int, raxis::Int)
+    (nl, nr) = ndims(left), ndims(right)
+    tinds = collect(Int, 1:nl+nr-2)
+    linds = collect(Int, 1:nl-1)
+    rinds = collect(Int, nl:nl+nr-2)
+    insert!(linds, laxis, nl+nr-1)
+    insert!(rinds, raxis, nl+nr-1)
+    Contract(left, right, linds, rinds, tinds)
+end
+
+# Matrix multiplication onto a specific axis, from right or left
+function Contract(left::ArrayEvaluable, right::ArrayEvaluable, onto::Int; fromright::Bool=false)
+    @assert ndims(left) == 2
+    tinds = collect(Int, 1:ndims(right))
+    rinds = collect(Int, 1:ndims(right))
+
+    z = ndims(right) + 1
+    rinds[onto] = z
+    linds = fromright ? [z, onto] : [onto, z]
+
+    Contract(left, right, linds, rinds, tinds)
+end
+
+# Contract last axis on the left with the first axis on the right
+Contract(left::ArrayEvaluable, right::ArrayEvaluable) = Contract(left, right, ndims(left), 1)
+
+Base.:*(left::ArrayEvaluable, right::ArrayEvaluable) = Contract(left, right)
+Base.:*(left::ArrayEvaluable, right) = Contract(left, asarray(right))
+Base.:*(left, right::ArrayEvaluable) = Contract(asarray(left), right)
 
 
 
@@ -147,10 +189,18 @@ function grad(self::ApplyTransform, d::Int)
 end
 
 function grad(self::Contract, d::Int)
-    newsym = gensym("temp")
-    lgrad = Contract(grad(self.left, d), self.right, [self.linds..., newsym], self.rinds, [self.tinds..., newsym])
-    rgrad = Contract(self.left, grad(self.right, d), self.linds, [self.rinds..., newsym], [self.tinds..., newsym])
-    Add(lgrad, rgrad)
+    new = newindex(self)
+    newtarget = [self.target; new]
+
+    terms = ArrayEvaluable[]
+    for i in 1:length(self.terms)
+        newterms, newinds = copy(self.terms), copy(self.indices)
+        newterms[i] = grad(newterms[i], d)
+        newinds[i] = [newinds[i]; new]
+        push!(terms, Contract(newterms, newinds, newtarget))
+    end
+
+    .+(terms...)
 end
 
 function grad(self::Monomials, d::Int)

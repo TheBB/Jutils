@@ -80,38 +80,50 @@ codegen(::Constant, alloc) = alloc
 # Contract
 
 @autohasheq struct Contract{T,N} <: ArrayEvaluable{T,N}
-    left :: ArrayEvaluable
-    right :: ArrayEvaluable
-    linds :: Vector
-    rinds :: Vector
-    tinds :: Vector
+    terms :: Vector{ArrayEvaluable}
+    indices :: Vector{Vector{Int}}
+    target :: Vector{Int}
+    shape :: Shape
 
-    function Contract(left::ArrayEvaluable, right::ArrayEvaluable, linds::Vector, rinds::Vector, tinds::Vector)
-        ndims(left) == length(linds) || error("Incorrect number of indices")
-        ndims(right) == length(rinds) || error("Incorrect number of indices")
-        nonrep = symdiff(Set(linds), Set(rinds))
-        nonrep == Set(tinds) || error("Incorrect number of indices")
+    function Contract(terms::Vector{ArrayEvaluable}, indices::Vector{Vector{Int}}, target::Vector{Int})
+        @assert length(terms) == length(indices)
+        @assert all(length(ind) == ndims(term) for (ind, term) in zip(indices, terms))
 
-        newtype = promote_type(eltype(left), eltype(right))
-        newdims = length(tinds)
-        new{newtype,newdims}(Normalize(left), Normalize(right), linds, rinds, tinds)
+        # Enumerate all index occurences and sizes
+        occurences = Dict{Int,Vector{Int}}()
+        for (term, inds) in zip(terms, indices)
+            for (axid, sz) in zip(inds, size(term))
+                push!(get!(occurences, axid, Int[]), sz)
+            end
+        end
+
+        # Every occurence has consistent size, and appears exactly twice, or once + in target
+        for (axid, occ) in occurences
+            @assert length(occ) == 2 || length(occ) == 1 && axid in target
+            @assert all(occ[1] == sz for sz in occ)
+        end
+
+        newshape = Tuple(occurences[axid][1] for axid in target)
+        newtype = reduce(promote_type, (eltype(term) for term in terms))
+        newdims = length(target)
+        new{newtype, newdims}(ArrayEvaluable[Normalize(term) for term in terms], indices, target, newshape)
     end
 end
 
-function Base.size(self::Contract)
-    sizes = Dict(Iterators.flatten([zip(self.linds, size(self.left)), zip(self.rinds, size(self.right))]))
-    ((sizes[ti] for ti in self.tinds)...,)
-end
+newindex(self::Contract) = maximum(Iterators.flatten((self.indices..., self.target))) + 1
+Base.size(self::Contract) = self.shape
 
-arguments(self::Contract) = (self.left, self.right)
+arguments(self::Contract) = Tuple(self.terms)
 prealloc(self::Contract{T}) where T = [:((Array{$T})(undef, $(size(self)...)))]
 
-function codegen(self::Contract, left, right, target)
-    cont = macroexpand(
-        Functions,
-        :(@tensor $target[($(self.tinds...))] = $left[($(self.linds...))] * $right[($(self.rinds...))])
-    )
-    :($cont; $target)
+function codegen(self::Contract, terms...)
+    target = terms[end]
+    terms = terms[1:end-1]
+
+    rhs = [:($t[$(i...)]) for (t,i) in zip(terms, self.indices)]
+    code = :(@tensor $target[$(self.target...)] = *($(rhs...)))
+    code = macroexpand(Functions, code)
+    :($code; $target)
 end
 
 
