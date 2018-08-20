@@ -78,6 +78,7 @@ Base.ndims(self::ArrayEvaluable{T,N}) where {T,N} = N :: Int
 Base.size(self::ArrayEvaluable, dim::Int) = size(self)[dim]
 Base.show(io::IO, self::ArrayEvaluable) = print(io, string(typeof(self).name.name), size(self))
 
+isnormal(::ArrayEvaluable) = true
 separate(self::ArrayEvaluable) = [(Tupl(Constant(collect(1:n)) for n in size(self)), self)]
 
 

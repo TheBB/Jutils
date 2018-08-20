@@ -41,7 +41,7 @@ end
 
 arguments(self::ApplyTransform) = (self.trans, self.arg)
 Base.size(self::ApplyTransform) = (self.dims,)
-prealloc(self::ApplyTransform) = []
+prealloc(::ApplyTransform) = []
 codegen(self::ApplyTransform, trans, arg) = :(applytrans($arg, $trans))
 
 
@@ -56,7 +56,7 @@ end
 
 arguments(self::ApplyTransformGrad) = (self.trans, self.arg)
 Base.size(self::ApplyTransformGrad) = (self.dims, self.dims)
-prealloc(self::ApplyTransformGrad) = []
+prealloc(::ApplyTransformGrad) = []
 codegen(self::ApplyTransformGrad, trans, arg) = :(applytrans_grad($arg, $trans))
 
 
@@ -94,7 +94,7 @@ codegen(::Constant, alloc) = alloc
 
         newtype = promote_type(eltype(left), eltype(right))
         newdims = length(tinds)
-        new{newtype,newdims}(left, right, linds, rinds, tinds)
+        new{newtype,newdims}(Normalize(left), Normalize(right), linds, rinds, tinds)
     end
 end
 
@@ -130,9 +130,10 @@ end
 
 Base.size(self::DropDims) = Tuple(s for (i, s) in enumerate(size(self.source)) if i ∉ self.dims)
 
+isnormal(::DropDims) = false
 arguments(self::DropDims) = (self.source,)
-prealloc(self::DropDims{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
-codegen(self::DropDims, source, target) = :($target .= dropdims($source, dims=$(self.dims)); $target)
+prealloc(::DropDims) = []
+codegen(self::DropDims, source) = :(dropdims($source, dims=$(self.dims)))
 
 
 
@@ -154,17 +155,10 @@ end
 
 Base.size(self::GetIndex) = resultsize(self.map, size(self.value))
 
+isnormal(::GetIndex) = false
 arguments(self::GetIndex) = (self.value, values(self.map)...)
-prealloc(self::GetIndex{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
-
-function codegen(self::GetIndex, value, varindices...)
-    target = varindices[end]
-    varindices = varindices[1:end-1]
-    quote
-        $target .= $value[$(codegen(self.map, varindices, ndims(self.value))...)]
-        $target
-    end
-end
+prealloc(::GetIndex) = []
+codegen(self::GetIndex, value, varindices...) = :(view($value, $(codegen(self.map, varindices, ndims(self.value))...)))
 
 
 
@@ -193,6 +187,7 @@ separate(self::Inflate) = [
 
 arguments(self::Inflate) = (self.data, values(self.map)...)
 prealloc(self::Inflate{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+
 function codegen(self::Inflate{T}, data, indices...) where T
     target, varindices = indices[end], collect(indices[1:end-1])
     weaved = codegen(self.map, varindices, ndims(self))
@@ -218,13 +213,15 @@ end
     end
 end
 
-arguments(self::InsertAxis) = (self.source,)
 function Base.size(self::InsertAxis)
     shape = collect(Int, size(self.source))
     insertmany!(shape, self.axes, 1)
     Tuple(shape)
 end
-prealloc(self::InsertAxis) = []
+
+isnormal(::InsertAxis) = false
+arguments(self::InsertAxis) = (self.source,)
+prealloc(::InsertAxis) = []
 codegen(self::InsertAxis, source) = :(reshape($source, $(size(self)...)))
 
 
@@ -240,8 +237,9 @@ codegen(self::InsertAxis, source) = :(reshape($source, $(size(self)...)))
     end
 end
 
-arguments(self::Inv) = (self.source,)
 Base.size(self::Inv) = size(self.source)
+
+arguments(self::Inv) = (self.source,)
 prealloc(self::Inv{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 # Would be useful with an inv! function here
@@ -282,8 +280,9 @@ end
     Monomials(points::ArrayEvaluable, degree::Int) = Monomials(points, degree, 0)
 end
 
-arguments(self::Monomials) = (self.points,)
 Base.size(self::Monomials) = (self.degree + self.padding + 1, size(self.points)...)
+
+arguments(self::Monomials) = (self.points,)
 prealloc(self::Monomials{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Monomials{T}, points, target) where T
@@ -313,8 +312,27 @@ end
 
 arguments(self::Neg) = (self.source,)
 Base.size(self::Neg) = size(self.source)
-prealloc(self::Neg) = []
+prealloc(::Neg) = []
 codegen(::Neg, source) = :(-$source)
+
+
+
+# Normalize
+
+@autohasheq struct Normalize{T,N} <: ArrayEvaluable{T,N}
+    source :: ArrayEvaluable{T,N}
+
+    function Normalize(source::ArrayEvaluable)
+        isnormal(source) && return source
+        new{eltype(source), ndims(source)}(source)
+    end
+end
+
+Base.size(self::Normalize) = size(self.source)
+
+arguments(self::Normalize) = (self.source,)
+prealloc(self::Normalize{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+codegen(::Normalize, source, target) = :($target .= $source; $target)
 
 
 
@@ -330,8 +348,9 @@ codegen(::Neg, source) = :(-$source)
     end
 end
 
-arguments(self::Product) = self.terms
 Base.size(self::Product) = broadcast_shape((size(term) for term in self.terms)...)
+
+arguments(self::Product) = self.terms
 prealloc(self::Product{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 # Note: element-wise product!
@@ -359,9 +378,10 @@ end
 
 Base.size(self::Reshape) = self.newshape
 
+isnormal(::Reshape) = false
 arguments(self::Reshape) = (self.source,)
-prealloc(self::Reshape{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
-codegen(self::Reshape, source, target) = :($target[:] = $source[:]; $target)
+prealloc(::Reshape) = []
+codegen(self::Reshape, source) = :(reshape($source, $(self.newshape...)))
 
 
 
@@ -399,8 +419,9 @@ end
 
 Add(terms...) = Add(terms)
 
-arguments(self::Add) = self.terms
 Base.size(self::Add) = broadcast_shape((size(term) for term in self.terms)...)
+
+arguments(self::Add) = self.terms
 prealloc(self::Add{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 function codegen(self::Add, args...)
@@ -443,8 +464,9 @@ codegen(self::Tupl, terms...) = :($(terms...),)
     Zeros(T, shape::Int...) = new{T,length(shape)}(shape)
 end
 
-arguments(::Zeros) = ()
 Base.size(self::Zeros) = self.shape
 separate(::Zeros) = []
+
+arguments(::Zeros) = ()
 prealloc(self::Zeros{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 codegen(self::Zeros{T}, target) where T = :($target[:] .= zero($T); $target)
