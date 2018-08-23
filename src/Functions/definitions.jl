@@ -115,16 +115,48 @@ prealloc(self::Constant) = [self.value]
     end
 end
 
-newindex(self::Contract) = maximum(Iterators.flatten((self.indices..., self.target))) + 1
+newindex(self::Contract) = maximum(flatten((self.indices..., self.target))) + 1
 Base.size(self::Contract) = self.shape
 
 arguments(self::Contract) = Tuple(self.terms)
 prealloc(self::Contract{T}) where T = [:((Array{$T})(undef, $(size(self)...)))]
 
+# Here, we essentially roll our own einsum macro. Options are:
+# - TensorOperations.jl: optimized for large arrays, which is typically not the case for us.
+#   Generated code always allocates.
+# - Einsum.jl: Generated code doesn't allocate, but not possible to avoid bounds checking,
+#   which we can statically guarantee is not needed.
+# May be changed in the future.
 @destructure function codegen(self::Contract, terms, [target])
-    rhs = [:($t[$(i...)]) for (t,i) in zip(terms, self.indices)]
-    code = :(@tensor $target[$(self.target...)] = *($(rhs...)))
-    code = macroexpand(Functions, code)
+    counters = Dict{Int,Symbol}(i => gensym(string(i)) for i in flatten((self.indices..., self.target)))
+    lengths = Dict{Int,Int}(i => size(term, j)
+                            for (term, inds) in zip(self.terms, self.indices)
+                            for (j, i) in enumerate(inds))
+    caxes = Set{Int}(k for k in keys(lengths) if k ∉ self.target)
+    taxes = Set{Int}(k for k in keys(lengths) if k in self.target)
+
+    c = i -> (counters[j] for j in i)
+
+    # Code for incrementing an element in the target array
+    getcodes = (:($t[$(c(i)...)]) for (t, i) in zip(terms, self.indices))
+    code = :(@inbounds $target[$(c(self.target)...)] += *($(getcodes...)))
+
+    # Code for looping over all contracted axes
+    for i in caxes
+        code = :(for $(counters[i]) in 1:$(lengths[i]); $code end)
+    end
+
+    # Initialize accumulator to zero
+    code = quote
+        $target[$(c(self.target)...)] = $(zero(eltype(self)))
+        $code
+    end
+
+    # Code for looping over all non-contracted axes
+    for i in taxes
+        code = :(for $(counters[i]) in 1:$(lengths[i]); $code end)
+    end
+
     :($code; $target)
 end
 
@@ -304,14 +336,14 @@ prealloc(self::Monomials{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
 @destructure function codegen(self::Monomials{T}, [points], [target]) where T
     j = gensym("j")
 
-    loopcode = Any[:($target[$(1+self.padding),$j] = 1.0)]
+    loopcode = Any[:(@inbounds $target[$(1+self.padding),$j] = 1.0)]
     for i in self.padding .+ (1:self.degree)
-        push!(loopcode, :($target[$(i+1),$j] = $target[$i,$j] * $points[$j]))
+        push!(loopcode, :(@inbounds $target[$(i+1),$j] = $target[$i,$j] * $points[$j]))
     end
 
     quote
         $target .= zero($T)
-        for $j = CartesianIndices(size($points))
+        for $j = CartesianIndices($(size(self.points)))
             $(loopcode...)
         end
         $target
