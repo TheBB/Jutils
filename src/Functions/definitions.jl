@@ -44,7 +44,8 @@ end
 arguments(self::ApplyTransform) = (self.trans, self.arg)
 Base.size(self::ApplyTransform) = (self.dims,)
 prealloc(::ApplyTransform) = []
-@destructure codegen(self::ApplyTransform, [trans, arg], []) = :(applytrans($arg, $trans))
+@destructure codegen(self::ApplyTransform, [trans, arg], []) =
+    :(applytrans($arg, $trans) :: $(restype(self)))
 
 
 
@@ -59,7 +60,8 @@ end
 arguments(self::ApplyTransformGrad) = (self.trans, self.arg)
 Base.size(self::ApplyTransformGrad) = (self.dims, self.dims)
 prealloc(::ApplyTransformGrad) = []
-@destructure codegen(self::ApplyTransformGrad, [trans, arg], []) = :(applytrans_grad($arg, $trans))
+@destructure codegen(self::ApplyTransformGrad, [trans, arg], []) =
+    :(applytrans_grad($arg, $trans) :: $(restype(self)))
 
 
 
