@@ -20,7 +20,12 @@ mutable struct FunctionData
     allocsyms :: Vector{Symbol}
     master_alloc :: Union{Symbol,Nothing}
 
-    FunctionData(func::Evaluable) = new(func)
+    # Note: Many fields are left undefined
+    function FunctionData(func::Evaluable)
+        retval = new(func)
+        retval.master_alloc = nothing
+        retval
+    end
 end
 
 function linearize(self::Evaluable)
@@ -120,7 +125,7 @@ function _compile(infunc::Evaluable, show::Bool)
     sequence = linearize(infunc)
     for data in sequence
         data.tgtsym = gensym()
-        data.allocexprs = prealloc(data.func)
+        data.allocexprs = prealloc(data.func, [sequence[argid].master_alloc for argid in data.arginds])
         data.allocsyms = Symbol[gensym() for _ in 1:length(data.allocexprs)]
         if !isempty(data.allocsyms)
             data.master_alloc = data.allocsyms[end]

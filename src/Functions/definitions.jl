@@ -12,7 +12,7 @@ isconstant(self::Argument) = self.isconstant
 iselconstant(self::Argument) = self.iselconstant
 
 arguments(::Argument) where T = ()
-prealloc(::Argument) = []
+@destructure prealloc(::Argument, []) = []
 @destructure codegen(self::Argument, [], []) = self.expression
 
 
@@ -28,7 +28,7 @@ iselconstant(self::ArrayArgument) = self.iselconstant
 Base.size(self::ArrayArgument) = self.shape
 
 arguments(::ArrayArgument) where T = ()
-prealloc(::ArrayArgument) = []
+@destructure prealloc(::ArrayArgument, []) = []
 @destructure codegen(self::ArrayArgument, [], []) = self.expression
 
 
@@ -43,7 +43,7 @@ end
 
 arguments(self::ApplyTransform) = (self.trans, self.arg)
 Base.size(self::ApplyTransform) = (self.dims,)
-prealloc(::ApplyTransform) = []
+@destructure prealloc(::ApplyTransform, []) = []
 @destructure codegen(self::ApplyTransform, [trans, arg], []) =
     :(applytrans($arg, $trans) :: $(restype(self)))
 
@@ -59,7 +59,7 @@ end
 
 arguments(self::ApplyTransformGrad) = (self.trans, self.arg)
 Base.size(self::ApplyTransformGrad) = (self.dims, self.dims)
-prealloc(::ApplyTransformGrad) = []
+@destructure prealloc(::ApplyTransformGrad, []) = []
 @destructure codegen(self::ApplyTransformGrad, [trans, arg], []) =
     :(applytrans_grad($arg, $trans) :: $(restype(self)))
 
@@ -77,7 +77,7 @@ Constant(v::T) where T <: Number = Constant(fill(v, ()))
 Base.size(self::Constant) = size(self.value)
 
 arguments(::Constant) = ()
-prealloc(self::Constant) = [self.value]
+@destructure prealloc(self::Constant, []) = [self.value]
 @destructure codegen(::Constant, [], [alloc]) = alloc
 
 
@@ -119,7 +119,7 @@ newindex(self::Contract) = maximum(flatten((self.indices..., self.target))) + 1
 Base.size(self::Contract) = self.shape
 
 arguments(self::Contract) = Tuple(self.terms)
-prealloc(self::Contract{T}) where T = [:((Array{$T})(undef, $(size(self)...)))]
+@destructure prealloc(self::Contract{T}, []) where T = [:((Array{$T})(undef, $(size(self)...)))]
 
 # Here, we essentially roll our own einsum macro. Options are:
 # - TensorOperations.jl: optimized for large arrays, which is typically not the case for us.
@@ -178,7 +178,7 @@ Base.size(self::DropDims) = Tuple(s for (i, s) in enumerate(size(self.source)) i
 
 isnormal(::DropDims) = false
 arguments(self::DropDims) = (self.source,)
-prealloc(::DropDims) = []
+@destructure prealloc(::DropDims, []) = []
 @destructure codegen(self::DropDims, [source], []) = :(dropdims($source, dims=$(self.dims)))
 
 
@@ -203,7 +203,7 @@ Base.size(self::GetIndex) = resultsize(self.map, size(self.value))
 
 isnormal(::GetIndex) = false
 arguments(self::GetIndex) = (self.value, values(self.map)...)
-prealloc(::GetIndex) = []
+@destructure prealloc(::GetIndex, []) = []
 
 @destructure function codegen(self::GetIndex, [value, varindices...], [])
     :(view($value, $(codegen(self.map, varindices, ndims(self.value))...)))
@@ -235,7 +235,7 @@ separate(self::Inflate) = [
 ]
 
 arguments(self::Inflate) = (self.data, values(self.map)...)
-prealloc(self::Inflate{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+@destructure prealloc(self::Inflate{T}, []) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 @destructure function codegen(self::Inflate{T}, [data, indices...], [target]) where T
     weaved = codegen(self.map, indices, ndims(self))
@@ -269,7 +269,7 @@ end
 
 isnormal(::InsertAxis) = false
 arguments(self::InsertAxis) = (self.source,)
-prealloc(::InsertAxis) = []
+@destructure prealloc(::InsertAxis, []) = []
 @destructure codegen(self::InsertAxis, [source], []) = :(reshape($source, $(size(self)...)))
 
 
@@ -288,7 +288,7 @@ end
 Base.size(self::Inv) = size(self.source)
 
 arguments(self::Inv) = (self.source,)
-prealloc(self::Inv{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+@destructure prealloc(self::Inv{T}, []) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 # Would be useful with an inv! function here
 @destructure codegen(::Inv, [source], [target]) = :($target .= inv($source); $target)
@@ -331,7 +331,7 @@ end
 Base.size(self::Monomials) = (self.degree + self.padding + 1, size(self.points)...)
 
 arguments(self::Monomials) = (self.points,)
-prealloc(self::Monomials{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+@destructure prealloc(self::Monomials{T}, []) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 @destructure function codegen(self::Monomials{T}, [points], [target]) where T
     j = gensym("j")
@@ -361,7 +361,7 @@ end
 Base.size(self::Neg) = size(self.source)
 
 arguments(self::Neg) = (self.source,)
-prealloc(::Neg) = []
+@destructure prealloc(::Neg, []) = []
 @destructure codegen(::Neg, [source], []) = :(-$source)
 
 
@@ -380,7 +380,7 @@ end
 Base.size(self::Normalize) = size(self.source)
 
 arguments(self::Normalize) = (self.source,)
-prealloc(self::Normalize{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+@destructure prealloc(self::Normalize{T}, []) where T = [:(Array{$T}(undef, $(size(self)...)))]
 @destructure codegen(::Normalize, [source], [target]) = :($target .= $source; $target)
 
 
@@ -400,7 +400,7 @@ end
 Base.size(self::Product) = broadcast_shape((size(term) for term in self.terms)...)
 
 arguments(self::Product) = self.terms
-prealloc(self::Product{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+@destructure prealloc(self::Product{T}, []) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 # Note: element-wise product!
 @destructure function codegen(self::Product, args, [target])
@@ -429,7 +429,7 @@ Base.size(self::Reshape) = self.newshape
 
 isnormal(::Reshape) = false
 arguments(self::Reshape) = (self.source,)
-prealloc(::Reshape) = []
+@destructure prealloc(::Reshape, []) = []
 @destructure codegen(self::Reshape, [source], []) = :(reshape($source, $(self.newshape...)))
 
 
@@ -449,7 +449,7 @@ end
 Base.size(self::Sum) = Tuple(i in self.dims ? 1 : k for (i, k) in enumerate(size(self.source)))
 
 arguments(self::Sum) = (self.source,)
-prealloc(self::Sum{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+@destructure prealloc(self::Sum{T}, []) where T = [:(Array{$T}(undef, $(size(self)...)))]
 @destructure codegen(self::Sum, [source], [target]) = :($target .= sum($source, dims=$(self.dims)))
 
 
@@ -471,7 +471,7 @@ Add(terms...) = Add(terms)
 Base.size(self::Add) = broadcast_shape((size(term) for term in self.terms)...)
 
 arguments(self::Add) = self.terms
-prealloc(self::Add{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+@destructure prealloc(self::Add{T}, []) where T = [:(Array{$T}(undef, $(size(self)...)))]
 
 @destructure function codegen(self::Add, args, [target])
     code = args[1]
@@ -501,7 +501,7 @@ Base.iterate(self::Tupl, i::Int) = iterate(self.terms, i)
 Base.length(self::Tupl) = length(self.terms)
 
 arguments(self::Tupl) = self.terms
-prealloc(self::Tupl) = []
+@destructure prealloc(self::Tupl, []) = []
 @destructure codegen(self::Tupl, terms, []) = :($(terms...),)
 
 
@@ -517,5 +517,5 @@ Base.size(self::Zeros) = self.shape
 separate(::Zeros) = []
 
 arguments(::Zeros) = ()
-prealloc(self::Zeros{T}) where T = [:(Array{$T}(undef, $(size(self)...)))]
+@destructure prealloc(self::Zeros{T}, []) where T = [:(Array{$T}(undef, $(size(self)...)))]
 @destructure codegen(self::Zeros{T}, [], [target]) where T = :($target[:] .= zero($T); $target)
