@@ -120,7 +120,7 @@ function _compile(infunc::Evaluable, show::Bool)
     for data in sequence
         data.tgtsym = gensym()
         data.allocexprs = prealloc(data.func)
-        data.allocsyms = [gensym() for _ in 1:length(data.allocexprs)]
+        data.allocsyms = Symbol[gensym() for _ in 1:length(data.allocexprs)]
     end
 
     # Code for allocation
@@ -132,9 +132,9 @@ function _compile(infunc::Evaluable, show::Bool)
     # Code for evaluation
     evalcode = Vector{Expr}()
     for data in sequence
-        argsyms = [sequence[argid].tgtsym for argid in data.arginds]
+        argsyms = Symbol[sequence[argid].tgtsym for argid in data.arginds]
         tgtsym = data.tgtsym
-        push!(evalcode, :($(data.tgtsym) = $(codegen(data.func, argsyms..., data.allocsyms...))))
+        push!(evalcode, :($(data.tgtsym) = $(codegen(data.func, argsyms, data.allocsyms))))
     end
 
     typeinfo = [(:point, Vector{Float64}), (:element, Element)]

@@ -66,6 +66,57 @@ macro autohasheq(typ)
 end
 
 
+function _destructure(prototype)
+    funcname = prototype.args[1]
+    funcparams = prototype.args[2:end]
+
+    destructure, newparams = Any[], Any[]
+
+    for arg in funcparams
+        if isa(arg, Symbol) || arg.head == :(::)
+            push!(newparams, esc(arg))
+            continue
+        end
+
+        @assert arg.head == :vect
+
+        parameter = gensym()
+        push!(newparams, esc(parameter))
+
+        for (i, subarg) in enumerate(arg.args)
+            if isa(subarg, Symbol)
+                push!(destructure, esc(:($subarg = $parameter[$i])))
+            else
+                @assert subarg.head == :...
+                push!(destructure, esc(:($(subarg.args[1]) = $parameter[$i:end])))
+            end
+        end
+    end
+
+    return :($(esc(funcname))($(newparams...))), destructure
+end
+
+macro destructure(funcdef)
+    @assert funcdef.head in [:(=), :function]
+    prototype, funcbody = funcdef.args
+
+    if prototype.head == :call
+        prototype, destructure = _destructure(prototype)
+    elseif prototype.head == :where
+        typeargs = prototype.args[2:end]
+        prototype, destructure = _destructure(prototype.args[1])
+        prototype = :($prototype where $((esc(t) for t in typeargs)...))
+    end
+
+    quote
+        $prototype = begin
+            $(destructure...)
+            $(esc(funcbody))
+        end
+    end
+end
+
+
 
 # Utility type for handling several types of indexing operations
 
