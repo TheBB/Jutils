@@ -18,6 +18,7 @@ mutable struct FunctionData
     tgtsym :: Union{Symbol,Nothing}
     allocexprs :: Vector{Any}
     allocsyms :: Vector{Symbol}
+    master_alloc :: Union{Symbol,Nothing}
 
     FunctionData(func::Evaluable) = new(func)
 end
@@ -27,7 +28,7 @@ function linearize(self::Evaluable)
     linearize!(indices, self)
     sequence = [FunctionData(func) for (func, index) in indices]
     for data in sequence
-        data.arginds = [indices[arg] for arg in arguments(data.func)]
+        data.arginds = Int[indices[arg] for arg in arguments(data.func)]
     end
     sequence
 end
@@ -121,6 +122,9 @@ function _compile(infunc::Evaluable, show::Bool)
         data.tgtsym = gensym()
         data.allocexprs = prealloc(data.func)
         data.allocsyms = Symbol[gensym() for _ in 1:length(data.allocexprs)]
+        if !isempty(data.allocsyms)
+            data.master_alloc = data.allocsyms[end]
+        end
     end
 
     # Code for allocation
