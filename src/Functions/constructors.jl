@@ -335,8 +335,8 @@ end
 
 const element = Argument{Element}(:element, false, true)
 const elemindex = ArrayArgument{Int,0}(:(fill(element.index, ())), false, true, ())
-const dimtrans = Argument{TransformChain}(:(element.dimcorr), false, true)
-const fulltrans = Argument{TransformChain}(:((element.dimcorr..., element.transform...)), false, true)
+const dimtrans = Argument{TransformChain}(:(element.transform[1]), false, true)
+const fulltrans = Argument{TransformChain}(:(element.transform), false, true)
 const _point = Argument{Vector{Float64}}(:point, false, false)
 point(n::Int) = ApplyTransform(dimtrans, _point, n)
 

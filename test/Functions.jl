@@ -6,16 +6,16 @@
     func = compile(fulltrans)
 
     val = ev(func, [0.5], lineelt)
-    @test val == ()
+    @test val == ((), ())
 
     val = ev(func, [0.5], Element(Simplex{1}(), 1; transform=(Shift([1.0]),)))
-    @test val == (Shift([1.0]),)
+    @test val == ((), (Shift([1.0]),))
 
     val = ev(func, [0.5], Element(Simplex{1}(), 1; dimcorr=(Updim{1,1}(2.4),)))
-    @test val == (Updim{1,1}(2.4),)
+    @test val == ((Updim{1,1}(2.4),), ())
 
     val = ev(func, [0.5], Element(Simplex{1}(), 1; dimcorr=(Updim{1,1}(2.4),), transform=(Shift([1.0]),)))
-    @test val == (Updim{1,1}(2.4), Shift([1.0]))
+    @test val == ((Updim{1,1}(2.4),), (Shift([1.0]),))
 
     func = compile(dimtrans)
 

@@ -36,10 +36,10 @@ Base.IndexStyle(::Type{StructuredTopology{N}}) where N = IndexCartesian()
     @boundscheck checkbounds(self, I...)
     if self.parent == nothing
         trans = (Shift([float(i-1) for i in I]),)
-        Element(Simplex{N}(), self.elemids[I...], self.dimcorr, trans)
+        Element(Simplex{N}(), self.elemids[I...], (self.dimcorr, trans))
     else
         super = self.parent[self.elemids[I...]]
-        Element(Simplex{N}(), super.index, (self.dimcorr..., super.dimcorr...), super.transform)
+        Element(Simplex{N}(), super.index, ((self.dimcorr..., super.dimcorr...), super.transform))
     end
 end
 
