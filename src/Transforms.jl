@@ -47,12 +47,16 @@ function codegen_grad(::Type{Updim{1,D}}, transform::Expr, pt::Symbol, out::Symb
 end
 
 
-function flatten_transforms!(ret, transforms, rootexpr)
-    for (i, trf) in enumerate(transforms.parameters)
-        if trf <: Tuple
+function flatten_transforms!(ret, transform, rootexpr)
+    if transform <: AbstractTransform
+        push!(ret, (transform, rootexpr))
+    elseif transform <: Tuple
+        for (i, trf) in enumerate(transform.parameters)
             flatten_transforms!(ret, trf, :($rootexpr[$i]))
-        elseif trf <: AbstractTransform
-            push!(ret, (trf, :($rootexpr[$i])))
+        end
+    elseif transform <: NamedTuple
+        for (i, trf) in enumerate(transform.parameters[2].parameters)
+            flatten_transforms!(ret, trf, :($rootexpr[$i]))
         end
     end
 end
@@ -63,7 +67,7 @@ function flatten_transforms(transforms)
     ret
 end
 
-@generated function applytrans(transforms::Tuple, points::Vector{Float64},
+@generated function applytrans(transforms, points::Vector{Float64},
                                workspace::Vector{Float64}, output::Vector{Float64})
     flat = flatten_transforms(transforms)
     trfcode = [codegen(dtype, code, :output, :workspace) for (dtype, code) in flat]
@@ -76,7 +80,7 @@ end
     end
 end
 
-@generated function applytrans_grad(transforms::Tuple, points::Vector{Float64},
+@generated function applytrans_grad(transforms, points::Vector{Float64},
                                     ptworkspace::Vector{Float64}, ptoutput::Vector{Float64},
                                     mxworkspace::Matrix{Float64}, mxoutput::Matrix{Float64})
     flat = flatten_transforms(transforms)
