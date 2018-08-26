@@ -47,12 +47,26 @@ function codegen_grad(::Type{Updim{1,D}}, transform::Expr, pt::Symbol, out::Symb
 end
 
 
-@generated function applytrans(transforms::TransformChain, points::Vector{Float64},
+function flatten_transforms!(ret, transforms, rootexpr)
+    for (i, trf) in enumerate(transforms.parameters)
+        if trf <: Tuple
+            flatten_transforms!(ret, trf, :($rootexpr[$i]))
+        elseif trf <: AbstractTransform
+            push!(ret, (trf, :($rootexpr[$i])))
+        end
+    end
+end
+
+function flatten_transforms(transforms)
+    ret = Tuple{DataType,Expr}[]
+    flatten_transforms!(ret, transforms, :transforms)
+    ret
+end
+
+@generated function applytrans(transforms::Tuple, points::Vector{Float64},
                                workspace::Vector{Float64}, output::Vector{Float64})
-    trfcode = [
-        codegen(fieldtype(transforms, i), :(transforms[$i]), :output, :workspace)
-        for i in 1:fieldcount(transforms)
-    ]
+    flat = flatten_transforms(transforms)
+    trfcode = [codegen(dtype, code, :output, :workspace) for (dtype, code) in flat]
 
     quote
         output .= 0.0
@@ -62,18 +76,12 @@ end
     end
 end
 
-@generated function applytrans_grad(transforms::TransformChain, points::Vector{Float64},
+@generated function applytrans_grad(transforms::Tuple, points::Vector{Float64},
                                     ptworkspace::Vector{Float64}, ptoutput::Vector{Float64},
                                     mxworkspace::Matrix{Float64}, mxoutput::Matrix{Float64})
-    pt_trfcode = [
-        codegen(fieldtype(transforms, i), :(transforms[$i]), :ptoutput, :ptworkspace)
-        for i in 1:fieldcount(transforms)
-    ]
-    mx_trfcode = [
-        codegen_grad(fieldtype(transforms, i), :(transforms[$i]), :ptoutput, :mxoutput, :mxworkspace)
-        for i in 1:fieldcount(transforms)
-    ]
-
+    flat = flatten_transforms(transforms)
+    pt_trfcode = [codegen(dtype, code, :ptoutput, :ptworkspace) for (dtype, code) in flat]
+    mx_trfcode = [codegen_grad(dtype, code, :ptoutput, :mxoutput, :mxworkspace) for (dtype, code) in flat]
     trfcode = [:($mx; $pt) for (pt, mx) in zip(pt_trfcode, mx_trfcode)]
 
     quote
