@@ -85,8 +85,7 @@ end
     trfcode = [:($mx; $pt) for (pt, mx) in zip(pt_trfcode, mx_trfcode)]
 
     quote
-        ptoutput .= 0.0
-        ptoutput[1:length(points)] = points
+        copyto!(ptoutput, points)
         copyto!(mxoutput, I)
         $(trfcode...)
         mxoutput
