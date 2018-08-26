@@ -19,8 +19,8 @@ end
 
 fromdims(self::Shift) = length(self.offset)
 todims(self::Shift) = length(self.offset)
-codegen(::Type{Shift}, transform::Expr, points::Symbol) = :($points .+ $transform.offset)
-codegen_grad(::Type{Shift}, ::Expr, ::Symbol, jac::Symbol) = jac
+codegen(::Type{Shift}, transform::Expr, out::Symbol, ::Symbol) = :($out .+= $transform.offset)
+codegen_grad(::Type{Shift}, ::Expr, ::Symbol, ::Symbol, ::Symbol) = :()
 
 
 @auto_hash_equals struct Updim{N,D} <: AbstractTransform
@@ -30,44 +30,59 @@ end
 fromdims(self::Updim{N}) where N = N
 todims(self::Updim{N}) where N = N + 1
 
-function codegen(::Type{Updim{N,D}}, transform::Expr, points::Symbol) where {N,D}
-    exprs = [:($points[$i]) for i in 1:N]
-    insert!(exprs, D, :($transform.value))
-    :([$(exprs...)])
-end
-
-function codegen_grad(::Type{Updim{1,D}}, transform::Expr, points::Symbol, jac::Symbol) where D
-    z = gensym()
+function codegen(::Type{Updim{N,D}}, transform::Expr, out::Symbol, _) where {N,D}
     quote
-        $z = [$jac[1:$(D-1),:]; zeros(1); $jac[$D:end,:]]
-        [$z[1,:] $z[2,1]; $z[2,:] -$z[1,1]]
+        $out[$(D+1):$(N+1)] .= $out[$D:$N]
+        $out[$D] = $transform.value
+    end
+end
+
+function codegen_grad(::Type{Updim{1,D}}, transform::Expr, pt::Symbol, out::Symbol, ::Symbol) where D
+    quote
+        $out[$(D+1):2, :] .= $out[$D:1, :]
+        $out[$D, :] .= 0.0
+        $out[1,2] = $out[2,1]
+        $out[2,2] = -$out[1,1]
     end
 end
 
 
-@generated function applytrans(points::Array{Float64}, transforms::TransformChain)
-    symbols = [gensym(string(index)) for index in 1:fieldcount(transforms)+1]
+@generated function applytrans(transforms::TransformChain, points::Vector{Float64},
+                               workspace::Vector{Float64}, output::Vector{Float64})
+    trfcode = [
+        codegen(fieldtype(transforms, i), :(transforms[$i]), :output, :workspace)
+        for i in 1:fieldcount(transforms)
+    ]
 
-    ret = :($(symbols[1]) = points)
-    for (i, fromsym, tosym) in zip(1:fieldcount(transforms), symbols[1:end-1], symbols[2:end])
-        code = codegen(fieldtype(transforms, i), :(transforms[$i]), fromsym)
-        ret = :($ret; $tosym = $code)
+    quote
+        output .= 0.0
+        output[1:length(points)] = points
+        $(trfcode...)
+        output
     end
-    :($ret; return $(symbols[end]))
 end
 
-@generated function applytrans_grad(points::Array{Float64}, transforms::TransformChain)
-    ptsyms = [gensym(string(index)) for index in 1:fieldcount(transforms)+1]
-    mxsyms = [gensym(string(index)) for index in 1:fieldcount(transforms)+1]
+@generated function applytrans_grad(transforms::TransformChain, points::Vector{Float64},
+                                    ptworkspace::Vector{Float64}, ptoutput::Vector{Float64},
+                                    mxworkspace::Matrix{Float64}, mxoutput::Matrix{Float64})
+    pt_trfcode = [
+        codegen(fieldtype(transforms, i), :(transforms[$i]), :ptoutput, :ptworkspace)
+        for i in 1:fieldcount(transforms)
+    ]
+    mx_trfcode = [
+        codegen_grad(fieldtype(transforms, i), :(transforms[$i]), :ptoutput, :mxoutput, :mxworkspace)
+        for i in 1:fieldcount(transforms)
+    ]
 
-    ret = :($(ptsyms[1]) = points; $(mxsyms[1]) = Matrix(1.0I, length(points), length(points)))
-    iter = zip(1:fieldcount(transforms), ptsyms[1:end-1], ptsyms[2:end], mxsyms[1:end-1], mxsyms[2:end])
-    for (i, fromptsym, toptsym, frommxsym, tomxsym) in iter
-        mxcode = codegen_grad(fieldtype(transforms, i), :(transforms[$i]), fromptsym, frommxsym)
-        ptcode = codegen(fieldtype(transforms, i), :(transforms[$i]), fromptsym)
-        ret = :($ret; $tomxsym = $mxcode; $toptsym = $ptcode)
+    trfcode = [:($mx; $pt) for (pt, mx) in zip(pt_trfcode, mx_trfcode)]
+
+    quote
+        ptoutput .= 0.0
+        ptoutput[1:length(points)] = points
+        copyto!(mxoutput, I)
+        $(trfcode...)
+        mxoutput
     end
-    :($ret; return $(mxsyms[end]))
 end
 
 end # module

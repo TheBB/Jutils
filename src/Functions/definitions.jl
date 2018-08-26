@@ -41,11 +41,16 @@ arguments(::ArrayArgument) where T = ()
     dims :: Int
 end
 
-arguments(self::ApplyTransform) = (self.trans, self.arg)
 Base.size(self::ApplyTransform) = (self.dims,)
-@destructure prealloc(::ApplyTransform, []) = []
-@destructure codegen(self::ApplyTransform, [trans, arg], []) =
-    :(applytrans($arg, $trans) :: $(restype(self)))
+
+arguments(self::ApplyTransform) = (self.trans, self.arg)
+@destructure prealloc(self::ApplyTransform, []) = [
+    :(Vector{Float64}(undef, $(self.dims))),
+    :(Vector{Float64}(undef, $(self.dims))),
+]
+@destructure codegen(self::ApplyTransform, [trans, arg], [ws, out]) = quote
+    applytrans($trans, $arg, $ws, $out) :: $(restype(self))
+end
 
 
 
@@ -57,11 +62,18 @@ Base.size(self::ApplyTransform) = (self.dims,)
     dims :: Int
 end
 
-arguments(self::ApplyTransformGrad) = (self.trans, self.arg)
 Base.size(self::ApplyTransformGrad) = (self.dims, self.dims)
-@destructure prealloc(::ApplyTransformGrad, []) = []
-@destructure codegen(self::ApplyTransformGrad, [trans, arg], []) =
-    :(applytrans_grad($arg, $trans) :: $(restype(self)))
+
+arguments(self::ApplyTransformGrad) = (self.trans, self.arg)
+@destructure prealloc(self::ApplyTransformGrad, []) = [
+    :(Vector{Float64}(undef, $(self.dims))),
+    :(Vector{Float64}(undef, $(self.dims))),
+    :(Matrix{Float64}(undef, $(self.dims), $(self.dims))),
+    :(Matrix{Float64}(undef, $(self.dims), $(self.dims))),
+]
+@destructure codegen(self::ApplyTransformGrad, [trans, arg], [ptws, ptout, mxws, mxout]) = quote
+    applytrans_grad($trans, $arg, $ptws, $ptout, $mxws, $mxout) :: $(restype(self))
+end
 
 
 
