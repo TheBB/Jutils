@@ -269,7 +269,7 @@ end
     function InsertAxis(source::ArrayEvaluable, axes::Vector{Int})
         isempty(axes) && return source
         all(1 <= i <= ndims(source) + 1 for i in axes) || error("Axes out of range")
-        new{eltype(source), ndims(source)+length(axes)}(source, sort(axes))
+        new{eltype(source), ndims(source)+length(axes)}(Normalize(source), sort(axes))
     end
 end
 
@@ -281,8 +281,8 @@ end
 
 isnormal(::InsertAxis) = false
 arguments(self::InsertAxis) = (self.source,)
-@destructure prealloc(::InsertAxis, []) = []
-@destructure codegen(self::InsertAxis, [source], []) = :(reshape($source, $(size(self)...)))
+@destructure prealloc(self::InsertAxis, [dep]) = [:(reshape($dep, $(size(self)...)))]
+@destructure codegen(self::InsertAxis, [], [pre]) = pre
 
 
 
@@ -433,7 +433,7 @@ end
 
     function Reshape(source::ArrayEvaluable, newshape::Shape)
         @assert prod(newshape) == length(source)
-        new{eltype(source), length(newshape)}(source, newshape)
+        new{eltype(source), length(newshape)}(Normalize(source), newshape)
     end
 end
 
@@ -441,8 +441,8 @@ Base.size(self::Reshape) = self.newshape
 
 isnormal(::Reshape) = false
 arguments(self::Reshape) = (self.source,)
-@destructure prealloc(::Reshape, []) = []
-@destructure codegen(self::Reshape, [source], []) = :(reshape($source, $(self.newshape...)))
+@destructure prealloc(self::Reshape, [dep]) = [:(reshape($dep, $(size(self)...)))]
+@destructure codegen(self::Reshape, [], [pre]) = pre
 
 
 
