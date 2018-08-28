@@ -91,7 +91,7 @@ end
     )
 end
 
-@testset "2D-Lagrange-Mass" begin
+@testset "2D-Lagrange-Lapl" begin
     domain, geom = rectilinear(2, 2)
     pfunc = dropdims(sum(outer(grad(mkbasis(domain, Lagrange, 1), geom)), (3,)), (3,))
 
