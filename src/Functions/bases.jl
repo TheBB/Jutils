@@ -169,13 +169,14 @@ compile(func::Evaluable{T}; show::Bool=false) where T = Compiled{T}(Base.invokel
 
 function compile(func::ArrayEvaluable{T,N}; show::Bool=false, dense::Bool=true) where {T,N}
     if dense
-        CompiledArray{T,N}(Base.invokelatest(_compile, func, show), size(func))
+        CompiledArray{T,N}(Base.invokelatest(_compile, Normalize(func), show), size(func))
     else
         blocks = separate(func)
         @assert length(blocks) == 1
         inds, data = blocks[1]
+        inds = Tupl(Normalize(k) for k in inds)
         ikernel = compile(inds; show=show)
-        dkernel = compile(data; show=show)
+        dkernel = compile(Normalize(data); show=show)
         CompiledSparseArray{T,N}(ikernel, dkernel, size(func), size(data))
     end
 end
