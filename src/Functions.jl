@@ -9,6 +9,7 @@ import TensorOperations.@tensor
 
 import ..Transforms: TransformChain
 import ..Elements: Element
+import ..Runtime: legal_unsafe_index
 
 # Base exports
 export ast, callable, compile, isconstant, iselconstant, restype, typetree

@@ -218,7 +218,9 @@ arguments(self::GetIndex) = (self.value, values(self.map)...)
 @destructure prealloc(::GetIndex, []) = []
 
 @destructure function codegen(self::GetIndex, [value, varindices...], [])
-    :(view($value, $(codegen(self.map, varindices, ndims(self.value))...)))
+    index = codegen(self.map, values(self.map), ndims(self.value))
+    sym = legal_unsafe_index(index...) ? :UnsafeView : :view
+    :($sym($value, $(codegen(self.map, varindices, ndims(self.value))...)))
 end
 
 
@@ -234,7 +236,7 @@ end
         ndims(data) == length(shape) || error("Dimension mismatch")
         resultsize(map, shape) == size(data) || error("Size mismatch")
         dimcheck(map, 1, 1) || error("Only linear indices supported in inflation")
-        new{eltype(data), length(shape)}(data, shape, map)
+        new{eltype(data), length(shape)}(Normalize(data), shape, map)
     end
 end
 
