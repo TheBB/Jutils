@@ -236,6 +236,7 @@ grad(self::Inflate, d::Int) = Inflate(grad(self.data, d), (size(self)..., d), se
 grad(self::InsertAxis, d::Int) = InsertAxis(grad(self.source, d), self.axes)
 grad(self::Inv, d::Int) = -Contract(self, self * grad(self.source, d), 2; fromright=true)
 grad(self::Neg, d::Int) = -grad(self.source, d)
+grad(self::Normalize, d::Int) = grad(self.source, d)
 grad(self::Reshape, d::Int) = reshape(grad(self.source, d), self.newshape..., d)
 grad(self::Zeros, d::Int) = Zeros(eltype(self), size(self)..., d)
 
