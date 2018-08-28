@@ -17,6 +17,8 @@ const squareelt = Element(Tensor([Simplex{1}(), Simplex{1}()]), 1)
 ev(func, pt, elt) = callable(func)(pt, elt)
 
 
+@testset "Runtime" begin include("Runtime.jl") end
+
 @testset "Transforms" begin include("Transforms.jl") end
 
 @testset "Functions" begin include("Functions.jl") end
