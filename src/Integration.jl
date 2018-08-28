@@ -35,22 +35,21 @@ function integrate(func::CompiledSparseArray{T,2}, domain::Topology, npts::Int) 
     totlength = prod(func.blockshape)
     nelems = length(domain)
 
-    I = zeros(Int, totlength, nelems)
-    J = zeros(Int, totlength, nelems)
-    V = zeros(T, totlength, nelems)
+    I = zeros(Int, func.blockshape..., nelems) :: Array{Int, 3}
+    J = zeros(Int, func.blockshape..., nelems) :: Array{Int, 3}
+    V = zeros(T, func.blockshape..., nelems) :: Array{T, 3}
 
     ikernel, dkernel = callable(func)
     for (elemid, elem) in enumerate(domain)
         (pts, wts) = quadrules[elem.reference]
 
-        # TODO: This can surely be done better
-        blockI, blockJ = ikernel(pts[1,:], elem)
-        I[:, elemid] = Int[i for (i, _) in Iterators.product(blockI, blockJ)][:]
-        J[:, elemid] = Int[j for (_, j) in Iterators.product(blockI, blockJ)][:]
+        blockI, blockJ = ikernel(pts[1,:], elem) :: Tuple{Vector{Int}, Vector{Int}}
+        I[:, :, elemid] .= blockI
+        J[:, :, elemid] .= reshape(blockJ, 1, :)
 
         for i = 1:length(wts)
             data = dkernel(pts[i,:], elem)
-            V[:, elemid] += data[:] .* wts[i]
+            V[:, :, elemid] += data .* wts[i]
         end
     end
 
