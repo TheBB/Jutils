@@ -73,6 +73,15 @@ end
     )
 end
 
+@testset "1D-Load" begin
+    domain, _ = line(5)
+
+    func = compile(mkbasis(domain, Lagrange, 1); dense=false)
+    load = integrate(func, domain, 1)
+    @test isa(load, Vector{Float64})
+    @test load ≈ [0.5, 1.0, 1.0, 1.0, 1.0, 0.5]
+end
+
 @testset "2D-Lagrange-Mass" begin
     domain, _ = rectilinear(2, 2)
     pfunc = outer(mkbasis(domain, Lagrange, 1))

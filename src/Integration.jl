@@ -26,6 +26,25 @@ function integrate(func::CompiledArray{T}, domain::Topology, npts::Int) where T
     result
 end
 
+function integrate(func::CompiledSparseArray{T,1}, domain::Topology, npts::Int) where T
+    quadrules = Dict{ReferenceElement, Tuple{Array{Float64,2}, Vector{Float64}}}(
+        elem => quadrule(elem, npts) for elem in refelems(domain)
+    )
+
+    result = zeros(T, length(func))
+    ikernel, dkernel = callable(func)
+    for elem in domain
+        (pts, wts) = quadrules[elem.reference]
+        blockI, = ikernel(pts[1,:], elem) :: Tuple{Vector{Int}}
+        for i = 1:length(wts)
+            data = dkernel(pts[i,:], elem) :: Array{T,1}
+            result[blockI] += data .* wts[i]
+        end
+    end
+
+    result
+end
+
 function integrate(func::CompiledSparseArray{T,2}, domain::Topology, npts::Int) where T
     quadrules = Dict{ReferenceElement, Tuple{Array{Float64,2}, Vector{Float64}}}(
         elem => quadrule(elem, npts) for elem in refelems(domain)
