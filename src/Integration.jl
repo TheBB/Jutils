@@ -50,10 +50,7 @@ function integrate(func::CompiledSparseArray{T,2}, domain::Topology, npts::Int) 
         elem => quadrule(elem, npts) for elem in refelems(domain)
     )
 
-    # Compute total amount of data
-    totlength = prod(func.blockshape)
     nelems = length(domain)
-
     I = zeros(Int, func.blockshape..., nelems) :: Array{Int, 3}
     J = zeros(Int, func.blockshape..., nelems) :: Array{Int, 3}
     V = zeros(T, func.blockshape..., nelems) :: Array{T, 3}
@@ -67,7 +64,7 @@ function integrate(func::CompiledSparseArray{T,2}, domain::Topology, npts::Int) 
         J[:, :, elemid] .= reshape(blockJ, 1, :)
 
         for i = 1:length(wts)
-            data = dkernel(pts[i,:], elem)
+            data = dkernel(pts[i,:], elem) :: Array{T,2}
             V[:, :, elemid] += data .* wts[i]
         end
     end
